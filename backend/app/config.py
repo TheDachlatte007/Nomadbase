@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql+asyncpg://nomadbase:nomadbase_dev@db:5432/nomadbase"
+    DATABASE_URL: str
     APP_NAME: str = "NomadBase"
     DEBUG: bool = True
     API_V1_PREFIX: str = "/api"
