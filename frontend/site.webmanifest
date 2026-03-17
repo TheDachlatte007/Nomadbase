@@ -1,0 +1,17 @@
+{
+  "name": "NomadBase",
+  "short_name": "NomadBase",
+  "description": "Private travel basecamp for places, plans, and on-the-road notes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#efe9db",
+  "theme_color": "#0f5c52",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

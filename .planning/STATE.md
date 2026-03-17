@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-03-17T17:34:44.097Z"
-last_activity: 2026-03-17 — Roadmap created, requirements mapped, ready to begin Phase 1 planning
+status: in_progress
+stopped_at: Deployment-first refocus after repo exploration
+last_updated: "2026-03-17T20:05:00+01:00"
+last_activity: 2026-03-17 — Repo explored with subagents, backend scaffold confirmed, deployment-first path defined
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
-  percent: 0
+  percent: 10
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** A single app that answers: Where am I? What's around me? What do I want to see? What have I planned? What have I visited? What have I spent?
-**Current focus:** Phase 1 — Infrastructure
+**Current focus:** Phase 1 — Infrastructure, narrowed to the fastest path toward a first private deployment
 
 ## Current Position
 
 Phase: 1 of 5 (Infrastructure)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-17 — Roadmap created, requirements mapped, ready to begin Phase 1 planning
+Plan: Deployment-first refocus on top of the existing backend scaffold
+Status: In progress
+Last activity: 2026-03-17 — Repo explored with subagents, codebase map written, first-deployment path defined
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 10%
 
 ## Performance Metrics
 
@@ -67,15 +67,24 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- Create the first committed Alembic revision and make schema bootstrap part of deployment.
+- Add a minimal data-ingest path for one real region or one seed dataset so `places` is not empty.
+- Replace `/api/map/places` stub with a real PostGIS-backed query.
+- Replace `/api/saves` stubs with minimal create/list behavior for a usable `Map + Save` slice.
+- Decide the first deployment surface: thin Vue shell or Swagger/OpenAPI as temporary client.
+- Remove dev-only deployment defaults (`--reload`, bind-mounted source, wildcard CORS) before homeserver deploy.
+- Add one repeatable smoke check for `db`, migrations, health, and one real data endpoint.
 
 ### Blockers/Concerns
 
 - App must be usable within 1-2 months before trip departure — tight timeline
 - 100k+ POI data volume requires PostGIS spatial indexes to be correct from Phase 1
+- The repo currently has no `frontend/` app despite the roadmap expecting a mobile PWA.
+- Alembic is configured but no migration file exists yet, so fresh deployments would start with an empty database schema.
+- Local Docker validation is currently blocked by Docker Desktop returning `500 Internal Server Error` on daemon API calls.
 
 ## Session Continuity
 
-Last session: 2026-03-17T17:34:44.095Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-infrastructure/01-CONTEXT.md
+Last session: 2026-03-17T20:05:00+01:00
+Stopped at: Deployment-first refocus after repo exploration
+Resume file: .planning/DEPLOYMENT-FIRST.md

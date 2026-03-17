@@ -14,6 +14,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   api:
     build: ./backend
@@ -24,8 +25,16 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+asyncpg://nomadbase:${DB_PASSWORD:-nomadbase_dev}@db:5432/nomadbase
-    volumes:
-      - ./backend:/app
+      DEBUG: "false"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    restart: unless-stopped
 
 volumes:
   pgdata:

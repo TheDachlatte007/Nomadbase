@@ -37,6 +37,9 @@ Plans:
 - [ ] 01-02-PLAN.md — OSM data import pipeline: PBF parser, tag mapper, CLI tool, shell scripts (INFR-02)
 - [ ] 01-03-PLAN.md — PWA frontend shell: Vue 3 + Vite, bottom nav, light/dark mode, service worker (INFR-04)
 
+Current reality note:
+The repository already contains a partial backend scaffold for 01-01, but there is still no `frontend/` tree, no real migration revision, and no import pipeline. Near-term execution should follow `.planning/DEPLOYMENT-FIRST.md` to get to the first deployable slice quickly.
+
 ### Phase 2: Map + Save
 **Goal**: Users can explore POIs on a live map, filter by type and lifestyle, and bookmark places with personal status and notes
 **Depends on**: Phase 1
@@ -90,7 +93,7 @@ Note: Phase 5 (Admin) depends only on Phase 1 and can run concurrently with Phas
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Infrastructure | 0/3 | Planning complete | - |
+| 1. Infrastructure | 0/3 | Implementation started | - |
 | 2. Map + Save | 0/TBD | Not started | - |
 | 3. Trips | 0/TBD | Not started | - |
 | 4. Tracking | 0/TBD | Not started | - |

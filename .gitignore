@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Environment
+.env
+backend/.env
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Data and local runtime artifacts
+data/
+*.log
+*.sqlite3
+*.db
+*.osm.pbf
+
+# IDE and local tooling
+.claude/
+.DS_Store
+Thumbs.db

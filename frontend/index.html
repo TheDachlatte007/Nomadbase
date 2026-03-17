@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0f5c52">
+    <meta
+      name="description"
+      content="NomadBase is a private travel basecamp for places, plans, and on-the-road notes."
+    >
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="stylesheet" href="/styles.css">
+    <title>NomadBase</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Private Travel Basecamp</p>
+          <h1>NomadBase</h1>
+        </div>
+        <div class="status-pill" id="status-pill">Checking API</div>
+      </header>
+
+      <main class="content">
+        <section class="hero-card">
+          <div class="hero-copy">
+            <p class="hero-kicker">First deploy target</p>
+            <h2>One place to track where you are, what you found, and what comes next.</h2>
+            <p>
+              This first version is intentionally narrow: map discovery, saved places,
+              and the backend foundation needed to grow into the full travel system.
+            </p>
+          </div>
+          <div class="hero-metrics">
+            <div class="metric">
+              <span class="metric-label">Phase</span>
+              <strong>Infrastructure</strong>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Focus</span>
+              <strong>Map + Save beta</strong>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Deploy path</span>
+              <strong>Portainer + GitHub</strong>
+            </div>
+          </div>
+        </section>
+
+        <nav class="tab-nav" aria-label="Primary">
+          <button class="tab-button active" data-tab="map">Map</button>
+          <button class="tab-button" data-tab="saved">Saved</button>
+          <button class="tab-button" data-tab="trips">Trips</button>
+          <button class="tab-button" data-tab="more">More</button>
+        </nav>
+
+        <section class="panel active" id="panel-map">
+          <article class="info-card">
+            <p class="card-eyebrow">Today</p>
+            <h3>Discovery layer is the first real slice.</h3>
+            <p>
+              The next backend milestone is a real <code>/api/map/places</code> endpoint
+              backed by PostGIS data instead of placeholder responses.
+            </p>
+          </article>
+          <article class="callout-card">
+            <p class="card-eyebrow">API</p>
+            <h3 id="health-title">Waiting for health check</h3>
+            <p id="health-copy">
+              This page tries to reach <code>/api/health</code> through the frontend proxy.
+            </p>
+          </article>
+        </section>
+
+        <section class="panel" id="panel-saved">
+          <article class="info-card">
+            <p class="card-eyebrow">Saved places</p>
+            <h3>Want to visit, visited, favorite.</h3>
+            <p>
+              The first persistence loop will live here once the save routes move from
+              stubs to real database-backed CRUD.
+            </p>
+          </article>
+        </section>
+
+        <section class="panel" id="panel-trips">
+          <article class="info-card">
+            <p class="card-eyebrow">Trips</p>
+            <h3>Planned, but not blocking the first deploy.</h3>
+            <p>
+              Trips stay intentionally light for now so deployment work can focus on
+              infrastructure, data, and the discovery flow.
+            </p>
+          </article>
+        </section>
+
+        <section class="panel" id="panel-more">
+          <article class="info-card">
+            <p class="card-eyebrow">Deployment notes</p>
+            <h3>Built for a private homeserver setup.</h3>
+            <ul class="simple-list">
+              <li>GitHub is now connected as the remote source of truth.</li>
+              <li>The API container now runs Alembic migrations before boot.</li>
+              <li>This frontend serves static files and proxies <code>/api</code> to FastAPI.</li>
+            </ul>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

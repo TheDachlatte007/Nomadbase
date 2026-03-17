@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="NomadBase icon">
+  <defs>
+    <linearGradient id="g" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#0f5c52"/>
+      <stop offset="100%" stop-color="#c86f31"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#f7f1e3"/>
+  <path d="M64 20c-18.778 0-34 15.222-34 34 0 25.5 27.31 49.632 32.45 54.014a2.47 2.47 0 0 0 3.1 0C70.69 103.632 98 79.5 98 54 98 35.222 82.778 20 64 20Zm0 46a12 12 0 1 1 0-24 12 12 0 0 1 0 24Z" fill="url(#g)"/>
+</svg>
