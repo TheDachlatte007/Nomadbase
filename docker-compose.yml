@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: nomadbase
+      POSTGRES_USER: nomadbase
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-nomadbase_dev}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nomadbase"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://nomadbase:${DB_PASSWORD:-nomadbase_dev}@db:5432/nomadbase
+    volumes:
+      - ./backend:/app
+
+volumes:
+  pgdata:
