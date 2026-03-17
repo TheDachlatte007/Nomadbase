@@ -193,7 +193,7 @@ async def record_expense(
 
     expense_kwargs = {
         "amount": payload.amount,
-        "currency": "EUR",
+        "currency": payload.currency.upper(),
         "category": payload.category,
         "description": payload.description,
         "place_id": place_uuid,

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class ExpenseCreateRequest(BaseModel):
     amount: float = Field(gt=0)
+    currency: str = Field(default="EUR", max_length=3, min_length=3)
     category: str = Field(min_length=1, max_length=100)
     description: str | None = Field(default=None, max_length=4000)
     place_id: str | None = None

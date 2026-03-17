@@ -1,4 +1,12 @@
-FROM nginx:1.27-alpine
+# Stage 1: Build Vue app with Vite
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json ./
+RUN npm install
+COPY . .
+RUN npm run build
 
+# Stage 2: Serve with nginx
+FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY . /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html
