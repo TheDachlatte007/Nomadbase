@@ -7,6 +7,91 @@ const state = {
   imports: [],
 };
 
+// --- Map setup ---
+const TYPE_COLORS = {
+  park: "#2d7a2d",
+  restaurant: "#c86f31",
+  cafe: "#8b5e3c",
+  cultural: "#5b4a8a",
+  attraction: "#0f5c52",
+  hiking: "#1a6e4a",
+  viewpoint: "#1a5c8a",
+};
+
+function typeColor(type) {
+  return TYPE_COLORS[type] || "#5f6d69";
+}
+
+function makeMarkerIcon(type) {
+  const color = typeColor(type);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="34" viewBox="0 0 24 34">
+    <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0z" fill="${color}" stroke="white" stroke-width="1.5"/>
+    <circle cx="12" cy="12" r="5" fill="white"/>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: "",
+    iconSize: [24, 34],
+    iconAnchor: [12, 34],
+    popupAnchor: [0, -34],
+  });
+}
+
+let map = null;
+const placeMarkers = new Map();
+
+function initMap() {
+  if (map) return;
+  map = L.map("map-view", { zoomControl: true }).setView([20, 10], 2);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  }).addTo(map);
+}
+
+function syncMapMarkers(places) {
+  if (!map) return;
+
+  // Remove markers for places no longer in list
+  const currentIds = new Set(places.map((p) => p.id));
+  for (const [id, marker] of placeMarkers) {
+    if (!currentIds.has(id)) {
+      marker.remove();
+      placeMarkers.delete(id);
+    }
+  }
+
+  // Add new markers
+  for (const place of places) {
+    if (placeMarkers.has(place.id)) continue;
+    const marker = L.marker([place.lat, place.lon], {
+      icon: makeMarkerIcon(place.place_type),
+      title: place.name,
+    }).addTo(map);
+    marker.bindPopup(
+      `<strong>${escapeHtml(place.name)}</strong><br>
+       <span style="color:#5f6d69;font-size:0.9em">${escapeHtml(place.place_type)}${place.region ? ` · ${escapeHtml(place.region)}` : ""}</span>
+       ${place.description ? `<br><span style="font-size:0.88em">${escapeHtml(place.description)}</span>` : ""}`,
+      { maxWidth: 220 }
+    );
+    marker.on("click", () => {
+      const card = document.querySelector(`[data-place-id="${place.id}"]`);
+      if (card) {
+        card.closest("article")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        card.closest("article")?.classList.add("map-highlight");
+        setTimeout(() => card.closest("article")?.classList.remove("map-highlight"), 1800);
+      }
+    });
+    placeMarkers.set(place.id, marker);
+  }
+
+  // Fit map to markers if there are any
+  if (places.length > 0) {
+    const group = L.featureGroup([...placeMarkers.values()]);
+    map.fitBounds(group.getBounds().pad(0.2));
+  }
+}
+
 const buttons = document.querySelectorAll(".tab-button");
 const panels = document.querySelectorAll(".panel");
 const placesGrid = document.getElementById("places-grid");
@@ -27,6 +112,8 @@ const expenseSummaryCopy = document.getElementById("expense-summary-copy");
 const expensesGrid = document.getElementById("expenses-grid");
 const visitsGrid = document.getElementById("visits-grid");
 const importsList = document.getElementById("imports-list");
+const importForm = document.getElementById("import-form");
+const importFeedback = document.getElementById("import-feedback");
 
 for (const button of buttons) {
   button.addEventListener("click", () => {
@@ -38,6 +125,15 @@ for (const button of buttons) {
 
     for (const panel of panels) {
       panel.classList.toggle("active", panel.id === `panel-${tab}`);
+    }
+
+    if (tab === "map") {
+      // Leaflet needs a moment after the panel becomes visible
+      setTimeout(() => {
+        initMap();
+        map?.invalidateSize();
+        if (state.places.length > 0) syncMapMarkers(state.places);
+      }, 50);
     }
   });
 }
@@ -196,6 +292,7 @@ function renderSaved(data) {
             <span class="chip">${escapeHtml(saved.place.place_type)}</span>
             <span class="chip">${escapeHtml(saved.place.source)}</span>
           </div>
+          <button class="unsave-button" data-unsave-id="${escapeHtml(saved.id)}">Remove</button>
         </article>
       `
     )
@@ -377,6 +474,8 @@ async function loadPlaces() {
   state.places = payload.data || [];
   renderPlaces(state.places);
   syncSelectOptions();
+  initMap();
+  syncMapMarkers(state.places);
 }
 
 async function loadSavedPlaces() {
@@ -693,6 +792,63 @@ placesForm.addEventListener("submit", async (event) => {
   await loadPlaces();
 });
 
+document.getElementById("near-me-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("near-me-btn");
+  if (!navigator.geolocation) {
+    btn.textContent = "Not supported";
+    return;
+  }
+
+  btn.textContent = "Locating...";
+  btn.disabled = true;
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const { latitude, longitude } = pos.coords;
+
+      try {
+        initMap();
+        map.setView([latitude, longitude], 14);
+
+        // User location marker
+        L.circleMarker([latitude, longitude], {
+          radius: 8,
+          fillColor: "#0f5c52",
+          color: "#fff",
+          weight: 2,
+          fillOpacity: 0.9,
+        })
+          .addTo(map)
+          .bindPopup("You are here")
+          .openPopup();
+
+        const response = await fetch(
+          `/api/map/places/nearby?lat=${latitude}&lon=${longitude}&radius_m=2500&limit=20`
+        );
+        if (!response.ok) throw new Error("Nearby request failed");
+
+        const payload = await response.json();
+        const nearby = payload.data || [];
+        state.places = nearby;
+        renderPlaces(nearby);
+        syncSelectOptions();
+        syncMapMarkers(nearby);
+
+        btn.textContent = `${nearby.length} nearby`;
+      } catch {
+        btn.textContent = "Failed";
+      } finally {
+        btn.disabled = false;
+      }
+    },
+    () => {
+      btn.textContent = "Denied";
+      btn.disabled = false;
+    },
+    { timeout: 8000 }
+  );
+});
+
 placesGrid.addEventListener("submit", async (event) => {
   const form = event.target.closest(".save-form");
   if (!form) {
@@ -731,6 +887,57 @@ visitForm.addEventListener("submit", async (event) => {
 preferencesForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   await savePreferences();
+});
+
+importForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formData = new FormData(importForm);
+  const city = formData.get("city");
+  const country = formData.get("country") || null;
+
+  importFeedback.textContent = `Importing ${city}... (this can take 30–60 seconds)`;
+  const submitBtn = importForm.querySelector("button[type=submit]");
+  submitBtn.disabled = true;
+
+  try {
+    const response = await fetch("/api/admin/imports", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ city, country }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      importFeedback.textContent = `Error: ${payload.detail || "Import failed"}`;
+      return;
+    }
+
+    importFeedback.textContent = `Done — imported ${payload.imported} places for ${payload.region}.`;
+    importForm.reset();
+    await Promise.all([loadImports(), loadPlaces(), loadSystemStatus()]);
+  } catch {
+    importFeedback.textContent = "Import request failed.";
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+savedGrid.addEventListener("click", async (event) => {
+  const btn = event.target.closest("[data-unsave-id]");
+  if (!btn) return;
+
+  const savedId = btn.dataset.unsaveId;
+  btn.textContent = "Removing...";
+  btn.disabled = true;
+
+  const response = await fetch(`/api/saves/${savedId}`, { method: "DELETE" });
+  if (response.ok) {
+    await loadSavedPlaces();
+  } else {
+    btn.textContent = "Failed";
+    btn.disabled = false;
+  }
 });
 
 checkHealth();

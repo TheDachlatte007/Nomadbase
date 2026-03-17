@@ -374,6 +374,76 @@ code {
   gap: 12px;
 }
 
+.map-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.map-toolbar {
+  padding: 16px 18px 12px;
+}
+
+#map-view {
+  height: 360px;
+  width: 100%;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: #e8e0d0;
+}
+
+.places-grid-wrap {
+  padding: 16px 18px 18px;
+}
+
+.places-grid,
+.saved-grid,
+.trips-grid,
+.tracking-grid {
+  padding: 0 18px 18px;
+}
+
+.map-card .places-grid {
+  padding: 16px 18px 18px;
+}
+
+.import-form {
+  display: grid;
+  gap: 10px;
+  min-width: min(100%, 280px);
+}
+
+.secondary-button {
+  background: var(--surface-strong);
+  color: var(--primary);
+  border: 1px solid var(--border);
+}
+
+.secondary-button:hover {
+  background: var(--primary-soft);
+}
+
+.place-card.map-highlight {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.unsave-button {
+  border: 0;
+  border-radius: 12px;
+  padding: 0.55rem 0.9rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: rgba(200, 111, 49, 0.12);
+  color: var(--accent);
+  align-self: start;
+}
+
+.unsave-button:hover {
+  background: rgba(200, 111, 49, 0.22);
+}
+
 @keyframes reveal {
   from {
     opacity: 0;

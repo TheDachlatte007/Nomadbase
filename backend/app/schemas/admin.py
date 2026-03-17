@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import Optional
 
 
 class PreferencePayload(BaseModel):
@@ -29,3 +30,15 @@ class SystemStatusResponse(BaseModel):
     database: bool
     alpha_seed_enabled: bool
     metrics: dict[str, int]
+
+
+class ImportRequest(BaseModel):
+    city: str
+    country: Optional[str] = None
+
+
+class ImportResult(BaseModel):
+    region: str
+    imported: int
+    total_elements: int
+    bbox: Optional[dict] = None

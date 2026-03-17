@@ -11,6 +11,7 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
     <link rel="manifest" href="/site.webmanifest">
     <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <title>NomadBase</title>
   </head>
   <body>
@@ -59,16 +60,8 @@
         </nav>
 
         <section class="panel active" id="panel-map">
-          <article class="info-card wide-card">
-            <div class="stack-between">
-              <div>
-                <p class="card-eyebrow">Alpha map</p>
-                <h3>Discovery now has real alpha data.</h3>
-                <p>
-                  This deploy seeds example places for Berlin, Vienna, and Vancouver so the app
-                  shows real content immediately after boot.
-                </p>
-              </div>
+          <article class="info-card wide-card map-card">
+            <div class="map-toolbar">
               <form class="toolbar" id="places-form">
                 <input id="search-input" name="q" type="search" placeholder="Search places or regions">
                 <select id="type-select" name="place_type">
@@ -81,9 +74,11 @@
                   <option value="hiking">Hiking</option>
                   <option value="viewpoint">Viewpoint</option>
                 </select>
-                <button class="action-button" type="submit">Refresh</button>
+                <button class="action-button" type="submit">Search</button>
+                <button class="action-button secondary-button" type="button" id="near-me-btn">Near me</button>
               </form>
             </div>
+            <div id="map-view"></div>
             <div class="places-grid" id="places-grid">
               <p class="empty-state">Loading places...</p>
             </div>
@@ -232,8 +227,20 @@
             </div>
           </article>
           <article class="info-card wide-card">
-            <p class="card-eyebrow">Imports</p>
-            <h3>Current region inventory.</h3>
+            <div class="stack-between">
+              <div>
+                <p class="card-eyebrow">Import from OpenStreetMap</p>
+                <h3>Load real places for a city.</h3>
+                <p>Fetches restaurants, cafes, parks, attractions, viewpoints, and more from OSM via Overpass API.</p>
+              </div>
+              <form class="import-form" id="import-form">
+                <input name="city" type="text" placeholder="City e.g. Vienna" required>
+                <input name="country" type="text" placeholder="Country e.g. Austria">
+                <button class="action-button" type="submit">Import places</button>
+                <p class="feedback" id="import-feedback"></p>
+              </form>
+            </div>
+            <p class="card-eyebrow" style="margin-top:18px">Imported regions</p>
             <div class="imports-list" id="imports-list">
               <p class="empty-state">Waiting for import status...</p>
             </div>
@@ -242,6 +249,7 @@
       </main>
     </div>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN2GqkI=" crossorigin=""></script>
     <script src="/app.js"></script>
   </body>
 </html>

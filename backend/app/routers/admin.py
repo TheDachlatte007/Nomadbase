@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,11 +12,14 @@ from app.models.saved_place import SavedPlace
 from app.models.trip import Trip
 from app.models.visit import Visit
 from app.schemas.admin import (
+    ImportRequest,
+    ImportResult,
     ImportStatusResponse,
     PreferencesResponse,
     PreferencePayload,
     SystemStatusResponse,
 )
+from app.services.overpass import import_city
 
 router = APIRouter()
 
@@ -77,11 +80,19 @@ async def list_imports(db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.post("/imports")
-async def trigger_import():
-    return {
-        "message": "Manual alpha seed is active. Full import jobs are not wired yet.",
-    }
+@router.post("/imports", response_model=ImportResult)
+async def trigger_import(
+    payload: ImportRequest, db: AsyncSession = Depends(get_db)
+):
+    try:
+        result = await import_city(payload.city, payload.country, db)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Import failed: {exc}"
+        ) from exc
+    return ImportResult(**result)
 
 
 async def _load_preferences(db: AsyncSession) -> PreferencePayload:
