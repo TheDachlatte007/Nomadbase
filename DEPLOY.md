@@ -25,7 +25,8 @@ DB_PASSWORD=change_me
 The API container runs:
 
 1. `alembic upgrade head`
-2. `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+2. `python -m app.seed_alpha` when `SEED_ALPHA_DATA=true`
+3. `uvicorn app.main:app --host 0.0.0.0 --port 8000`
 
 That means the database schema should be created automatically on first deploy once the database is reachable.
 
@@ -38,9 +39,10 @@ Open:
 - `/api/docs`
 
 The homepage should show a frontend shell and try to read API health through nginx.
+The map tab should render alpha sample places right away after a healthy first boot.
 
 ## Known limitations
 
 - The frontend is a thin first-deploy shell, not the full product UI yet.
-- `map`, `saves`, `trips`, `tracking`, and `admin` are still mostly placeholder endpoints.
+- `trips`, `tracking`, and `admin` are still mostly placeholder endpoints.
 - Local Docker runtime was not verifiable in this coding session because Docker Desktop was failing in the IDE environment.

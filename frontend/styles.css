@@ -99,6 +99,13 @@ code {
   gap: 18px;
 }
 
+.stack-between {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .hero-card {
   display: grid;
   gap: 24px;
@@ -132,6 +139,10 @@ code {
   border: 1px solid var(--border);
   background: var(--surface);
   backdrop-filter: blur(8px);
+}
+
+.wide-card {
+  grid-column: 1 / -1;
 }
 
 .metric strong {
@@ -185,6 +196,107 @@ code {
   padding-left: 1.2rem;
 }
 
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.toolbar input,
+.toolbar select,
+.save-form textarea,
+.save-form select {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text);
+  font: inherit;
+}
+
+.toolbar input {
+  min-width: 220px;
+}
+
+.action-button {
+  border: 0;
+  border-radius: 12px;
+  padding: 0.82rem 1rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--primary);
+  color: #f8f6f1;
+}
+
+.places-grid,
+.saved-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.place-card,
+.saved-card {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-strong);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.place-card h4,
+.saved-card h4 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.28rem 0.68rem;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.muted {
+  color: var(--muted);
+  margin: 0;
+}
+
+.save-form {
+  display: grid;
+  gap: 10px;
+}
+
+.save-form textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.empty-state {
+  color: var(--muted);
+  margin: 0;
+}
+
+.feedback {
+  font-size: 0.88rem;
+  color: var(--primary);
+  margin: 0;
+}
+
 @keyframes reveal {
   from {
     opacity: 0;
@@ -206,6 +318,16 @@ code {
   .hero-card,
   .panel {
     grid-template-columns: 1fr;
+  }
+
+  .toolbar {
+    width: 100%;
+  }
+
+  .toolbar input,
+  .toolbar select,
+  .action-button {
+    width: 100%;
   }
 
   .topbar {

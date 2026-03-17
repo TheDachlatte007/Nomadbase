@@ -57,13 +57,34 @@
         </nav>
 
         <section class="panel active" id="panel-map">
-          <article class="info-card">
-            <p class="card-eyebrow">Today</p>
-            <h3>Discovery layer is the first real slice.</h3>
-            <p>
-              The next backend milestone is a real <code>/api/map/places</code> endpoint
-              backed by PostGIS data instead of placeholder responses.
-            </p>
+          <article class="info-card wide-card">
+            <div class="stack-between">
+              <div>
+                <p class="card-eyebrow">Alpha map</p>
+                <h3>Discovery now has real alpha data.</h3>
+                <p>
+                  This deploy seeds example places for Berlin, Vienna, and Vancouver so the app
+                  shows real content immediately after boot.
+                </p>
+              </div>
+              <form class="toolbar" id="places-form">
+                <input id="search-input" name="q" type="search" placeholder="Search places or regions">
+                <select id="type-select" name="place_type">
+                  <option value="">All types</option>
+                  <option value="park">Park</option>
+                  <option value="restaurant">Restaurant</option>
+                  <option value="cafe">Cafe</option>
+                  <option value="cultural">Cultural</option>
+                  <option value="attraction">Attraction</option>
+                  <option value="hiking">Hiking</option>
+                  <option value="viewpoint">Viewpoint</option>
+                </select>
+                <button class="action-button" type="submit">Refresh</button>
+              </form>
+            </div>
+            <div class="places-grid" id="places-grid">
+              <p class="empty-state">Loading places...</p>
+            </div>
           </article>
           <article class="callout-card">
             <p class="card-eyebrow">API</p>
@@ -75,13 +96,15 @@
         </section>
 
         <section class="panel" id="panel-saved">
-          <article class="info-card">
+          <article class="info-card wide-card">
             <p class="card-eyebrow">Saved places</p>
             <h3>Want to visit, visited, favorite.</h3>
             <p>
-              The first persistence loop will live here once the save routes move from
-              stubs to real database-backed CRUD.
+              This tab is connected to the backend now. Saves from the Map tab should show up here.
             </p>
+            <div class="saved-grid" id="saved-grid">
+              <p class="empty-state">No saved places yet.</p>
+            </div>
           </article>
         </section>
 
@@ -104,6 +127,7 @@
               <li>GitHub is now connected as the remote source of truth.</li>
               <li>The API container now runs Alembic migrations before boot.</li>
               <li>This frontend serves static files and proxies <code>/api</code> to FastAPI.</li>
+              <li>Alpha sample places are seeded automatically on first boot.</li>
             </ul>
           </article>
         </section>
