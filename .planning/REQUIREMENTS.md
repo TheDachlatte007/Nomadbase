@@ -95,13 +95,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated during roadmap creation) | | |
+| INFR-01 | Phase 1 | Pending |
+| INFR-02 | Phase 1 | Pending |
+| INFR-03 | Phase 1 | Pending |
+| INFR-04 | Phase 1 | Pending |
+| MAP-01 | Phase 2 | Pending |
+| MAP-02 | Phase 2 | Pending |
+| MAP-03 | Phase 2 | Pending |
+| SAVE-01 | Phase 2 | Pending |
+| SAVE-02 | Phase 2 | Pending |
+| TRIP-01 | Phase 3 | Pending |
+| TRIP-02 | Phase 3 | Pending |
+| TRIP-03 | Phase 3 | Pending |
+| TRIP-04 | Phase 3 | Pending |
+| TRAK-01 | Phase 4 | Pending |
+| TRAK-02 | Phase 4 | Pending |
+| TRAK-03 | Phase 4 | Pending |
+| ADMN-01 | Phase 5 | Pending |
+| ADMN-02 | Phase 5 | Pending |
+| ADMN-03 | Phase 5 | Pending |
+| ADMN-04 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20
+- Mapped to phases: 20
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after initial definition*
+*Last updated: 2026-03-17 after roadmap creation — all 20 requirements mapped*
