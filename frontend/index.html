@@ -29,18 +29,19 @@
             <p class="hero-kicker">First deploy target</p>
             <h2>One place to track where you are, what you found, and what comes next.</h2>
             <p>
-              This first version is intentionally narrow: map discovery, saved places,
-              and the backend foundation needed to grow into the full travel system.
+              This alpha version already covers discovery, saved places, trip skeletons,
+              lightweight tracking, and the backend foundation needed to grow into the
+              full travel system.
             </p>
           </div>
           <div class="hero-metrics">
             <div class="metric">
               <span class="metric-label">Phase</span>
-              <strong>Infrastructure</strong>
+              <strong>Alpha build</strong>
             </div>
             <div class="metric">
               <span class="metric-label">Focus</span>
-              <strong>Map + Save beta</strong>
+              <strong>Trips + Tracking</strong>
             </div>
             <div class="metric">
               <span class="metric-label">Deploy path</span>
@@ -53,6 +54,7 @@
           <button class="tab-button active" data-tab="map">Map</button>
           <button class="tab-button" data-tab="saved">Saved</button>
           <button class="tab-button" data-tab="trips">Trips</button>
+          <button class="tab-button" data-tab="tracking">Tracking</button>
           <button class="tab-button" data-tab="more">More</button>
         </nav>
 
@@ -109,13 +111,90 @@
         </section>
 
         <section class="panel" id="panel-trips">
+          <article class="info-card wide-card">
+            <div class="stack-between">
+              <div>
+                <p class="card-eyebrow">Trips</p>
+                <h3>Trips are live in alpha form.</h3>
+                <p>
+                  Create a trip, add lightweight city stops, and keep a simple route skeleton
+                  alongside your saved places.
+                </p>
+              </div>
+              <form class="trip-form" id="trip-form">
+                <input name="name" type="text" placeholder="Trip name" required>
+                <input name="start_date" type="date">
+                <input name="end_date" type="date">
+                <textarea name="notes" placeholder="Notes for this trip"></textarea>
+                <button class="action-button" type="submit">Create trip</button>
+              </form>
+            </div>
+            <div class="trips-grid" id="trips-grid">
+              <p class="empty-state">No trips yet.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="panel" id="panel-tracking">
           <article class="info-card">
-            <p class="card-eyebrow">Trips</p>
-            <h3>Planned, but not blocking the first deploy.</h3>
-            <p>
-              Trips stay intentionally light for now so deployment work can focus on
-              infrastructure, data, and the discovery flow.
-            </p>
+            <p class="card-eyebrow">Expenses</p>
+            <h3>Track what the trip is costing.</h3>
+            <form class="tracking-form" id="expense-form">
+              <input name="amount" type="number" min="0.01" step="0.01" placeholder="Amount in EUR" required>
+              <input name="category" type="text" placeholder="Category e.g. food, transport" required>
+              <input name="date" type="date">
+              <select name="trip_id">
+                <option value="">No linked trip</option>
+              </select>
+              <select name="place_id">
+                <option value="">No linked place</option>
+              </select>
+              <textarea name="description" placeholder="What did you spend this on?"></textarea>
+              <button class="action-button" type="submit">Record expense</button>
+              <p class="feedback" id="expense-feedback"></p>
+            </form>
+          </article>
+
+          <article class="info-card">
+            <p class="card-eyebrow">Visits</p>
+            <h3>Log where you actually went.</h3>
+            <form class="tracking-form" id="visit-form">
+              <select name="place_id" required>
+                <option value="">Choose a place</option>
+              </select>
+              <select name="trip_id">
+                <option value="">No linked trip</option>
+              </select>
+              <input name="visited_at" type="datetime-local">
+              <textarea name="notes" placeholder="Quick memory or field note"></textarea>
+              <button class="action-button" type="submit">Log visit</button>
+              <p class="feedback" id="visit-feedback"></p>
+            </form>
+          </article>
+
+          <article class="info-card wide-card">
+            <div class="stack-between">
+              <div>
+                <p class="card-eyebrow">Overview</p>
+                <h3>Recent activity and cost summary.</h3>
+                <p class="muted" id="expense-summary-copy">Waiting for tracking data...</p>
+              </div>
+              <div class="summary-list" id="expense-summary"></div>
+            </div>
+            <div class="tracking-sections">
+              <div>
+                <p class="card-eyebrow">Recent expenses</p>
+                <div class="tracking-grid" id="expenses-grid">
+                  <p class="empty-state">No expenses yet.</p>
+                </div>
+              </div>
+              <div>
+                <p class="card-eyebrow">Recent visits</p>
+                <div class="tracking-grid" id="visits-grid">
+                  <p class="empty-state">No visits yet.</p>
+                </div>
+              </div>
+            </div>
           </article>
         </section>
 
@@ -128,7 +207,36 @@
               <li>The API container now runs Alembic migrations before boot.</li>
               <li>This frontend serves static files and proxies <code>/api</code> to FastAPI.</li>
               <li>Alpha sample places are seeded automatically on first boot.</li>
+              <li>Trips, expenses, and visits are now wired as lightweight alpha flows.</li>
             </ul>
+          </article>
+          <article class="info-card">
+            <p class="card-eyebrow">System</p>
+            <h3>Alpha status and preferences.</h3>
+            <div class="admin-grid">
+              <div class="status-block">
+                <p class="muted" id="system-status-copy">Waiting for system status...</p>
+                <div class="chip-row" id="system-metrics"></div>
+              </div>
+              <form class="preferences-form" id="preferences-form">
+                <input name="interests" type="text" placeholder="Interests, comma separated">
+                <input name="dietary_filters" type="text" placeholder="Dietary filters, comma separated">
+                <select name="budget_level">
+                  <option value="budget">Budget</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="comfort">Comfort</option>
+                </select>
+                <button class="action-button" type="submit">Save preferences</button>
+                <p class="feedback" id="preferences-feedback"></p>
+              </form>
+            </div>
+          </article>
+          <article class="info-card wide-card">
+            <p class="card-eyebrow">Imports</p>
+            <h3>Current region inventory.</h3>
+            <div class="imports-list" id="imports-list">
+              <p class="empty-state">Waiting for import status...</p>
+            </div>
           </article>
         </section>
       </main>

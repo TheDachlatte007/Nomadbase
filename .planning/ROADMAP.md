@@ -52,6 +52,9 @@ The repository already contains a partial backend scaffold for 01-01, but there 
   5. User can open a saved place and add or edit personal notes
 **Plans**: TBD
 
+Current reality note:
+The repo now contains a working alpha data flow for `places` and `saves`, including seeded sample places, server-side filtering, and note/status persistence. The missing pieces are the actual interactive map surface and lifestyle-filter UI.
+
 ### Phase 3: Trips
 **Goal**: Users can organize their journey into named trips with cities and planned places, viewable as both a map and a list
 **Depends on**: Phase 2
@@ -63,6 +66,9 @@ The repository already contains a partial backend scaffold for 01-01, but there 
   4. User can view a trip as a map showing pins for all assigned places alongside a scrollable side list
 **Plans**: TBD
 
+Current reality note:
+Trip creation and city assignment are live in alpha form through the API and frontend shell. Saved-place assignment into trip cities and the dedicated trip map/list view are still open.
+
 ### Phase 4: Tracking
 **Goal**: Users can record what they spend and where they go, and see a summary of expenses by category
 **Depends on**: Phase 2
@@ -72,6 +78,9 @@ The repository already contains a partial backend scaffold for 01-01, but there 
   2. User can log a visit to a place with a timestamp and notes
   3. User can view an expense overview showing totals by category, filterable by trip or city
 **Plans**: TBD
+
+Current reality note:
+The alpha now supports expense creation, visit logging, recent activity lists, and category totals. Follow-up work should focus on richer filters and better linking back into trips and cities.
 
 ### Phase 5: Admin
 **Goal**: Users can manage OSM data imports, monitor system health, and configure personal preferences
@@ -84,6 +93,9 @@ The repository already contains a partial backend scaffold for 01-01, but there 
   4. User can see system status: database size, API health indicator, and cronjob last-run timestamp
 **Plans**: TBD
 
+Current reality note:
+Preferences, import inventory, and system metrics are exposed in the API and frontend alpha. Real import jobs and scheduled update visibility still need to be implemented.
+
 ## Progress
 
 **Execution Order:**
@@ -93,8 +105,8 @@ Note: Phase 5 (Admin) depends only on Phase 1 and can run concurrently with Phas
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Infrastructure | 0/3 | Implementation started | - |
-| 2. Map + Save | 0/TBD | Not started | - |
-| 3. Trips | 0/TBD | Not started | - |
-| 4. Tracking | 0/TBD | Not started | - |
-| 5. Admin | 0/TBD | Not started | - |
+| 1. Infrastructure | 0/3 | Deployable alpha foundation in repo | - |
+| 2. Map + Save | 0/TBD | Alpha implementation started | - |
+| 3. Trips | 0/TBD | Alpha implementation started | - |
+| 4. Tracking | 0/TBD | Alpha implementation started | - |
+| 5. Admin | 0/TBD | Alpha implementation started | - |

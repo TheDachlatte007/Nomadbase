@@ -152,7 +152,7 @@ code {
 
 .tab-nav {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 10px;
 }
 
@@ -205,8 +205,15 @@ code {
 
 .toolbar input,
 .toolbar select,
+.trip-form input,
+.trip-form textarea,
+.tracking-form input,
+.tracking-form textarea,
+.tracking-form select,
 .save-form textarea,
-.save-form select {
+.save-form select,
+.preferences-form input,
+.preferences-form select {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 0.8rem 0.9rem;
@@ -231,7 +238,9 @@ code {
 }
 
 .places-grid,
-.saved-grid {
+.saved-grid,
+.trips-grid,
+.tracking-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 16px;
@@ -239,7 +248,9 @@ code {
 }
 
 .place-card,
-.saved-card {
+.saved-card,
+.trip-card,
+.tracking-card {
   border: 1px solid var(--border);
   border-radius: 18px;
   background: var(--surface-strong);
@@ -249,7 +260,9 @@ code {
 }
 
 .place-card h4,
-.saved-card h4 {
+.saved-card h4,
+.trip-card h4,
+.tracking-card h4 {
   margin: 0;
   font-size: 1.2rem;
 }
@@ -281,8 +294,26 @@ code {
   gap: 10px;
 }
 
+.trip-form,
+.tracking-form,
+.preferences-form {
+  display: grid;
+  gap: 10px;
+  min-width: min(100%, 320px);
+}
+
 .save-form textarea {
   min-height: 84px;
+  resize: vertical;
+}
+
+.trip-form textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.tracking-form textarea {
+  min-height: 86px;
   resize: vertical;
 }
 
@@ -295,6 +326,52 @@ code {
   font-size: 0.88rem;
   color: var(--primary);
   margin: 0;
+}
+
+.cities-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+}
+
+.city-form {
+  display: grid;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.city-form-row,
+.admin-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.tracking-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.summary-list,
+.imports-list {
+  display: grid;
+  gap: 10px;
+}
+
+.summary-item,
+.import-item {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.status-block {
+  display: grid;
+  gap: 12px;
 }
 
 @keyframes reveal {
@@ -326,6 +403,13 @@ code {
 
   .toolbar input,
   .toolbar select,
+  .trip-form input,
+  .trip-form textarea,
+  .tracking-form input,
+  .tracking-form textarea,
+  .tracking-form select,
+  .preferences-form input,
+  .preferences-form select,
   .action-button {
     width: 100%;
   }
@@ -346,5 +430,9 @@ code {
     border-radius: 22px;
     backdrop-filter: blur(10px);
     box-shadow: var(--shadow);
+  }
+
+  .tracking-sections {
+    grid-template-columns: 1fr;
   }
 }

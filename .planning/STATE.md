@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Deployment-first refocus after repo exploration
-last_updated: "2026-03-17T20:05:00+01:00"
-last_activity: 2026-03-17 — Repo explored with subagents, backend scaffold confirmed, deployment-first path defined
+stopped_at: Alpha slice extended through trips, tracking, and admin workflows
+last_updated: "2026-03-17T22:15:00+01:00"
+last_activity: 2026-03-17 — Trips, expenses, visits, import inventory, and system metrics wired into the alpha frontend/backend
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 3
   completed_plans: 0
-  percent: 10
+  percent: 45
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** A single app that answers: Where am I? What's around me? What do I want to see? What have I planned? What have I visited? What have I spent?
-**Current focus:** Phase 1 — Infrastructure, narrowed to the fastest path toward a first private deployment
+**Current focus:** Deployment-first alpha hardening across the most important v1 loops
 
 ## Current Position
 
-Phase: 1 of 5 (Infrastructure)
-Plan: Deployment-first refocus on top of the existing backend scaffold
+Phase: Cross-phase alpha slice after deployment-first bootstrap
+Plan: Turn the shell into a usable end-to-end alpha before deeper map/import work
 Status: In progress
-Last activity: 2026-03-17 — Repo explored with subagents, codebase map written, first-deployment path defined
+Last activity: 2026-03-17 — Trips, tracking, and admin alpha flows added on top of the existing map/save foundation
 
-Progress: [█░░░░░░░░░] 10%
+Progress: [█████░░░░░] 45%
 
 ## Performance Metrics
 
@@ -67,24 +67,23 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Create the first committed Alembic revision and make schema bootstrap part of deployment.
-- Add a minimal data-ingest path for one real region or one seed dataset so `places` is not empty.
-- Replace `/api/map/places` stub with a real PostGIS-backed query.
-- Replace `/api/saves` stubs with minimal create/list behavior for a usable `Map + Save` slice.
-- Decide the first deployment surface: thin Vue shell or Swagger/OpenAPI as temporary client.
-- Remove dev-only deployment defaults (`--reload`, bind-mounted source, wildcard CORS) before homeserver deploy.
-- Add one repeatable smoke check for `db`, migrations, health, and one real data endpoint.
+- Replace the static discovery grid with a real MapLibre map and viewport-driven POI loading.
+- Add saved-place assignment into trip cities plus a trip map/list view.
+- Implement the real OSM import pipeline and connect admin import actions to it.
+- Tighten deployment defaults further: environment-specific CORS, secrets handling, and homeserver-ready config.
+- Add repeatable smoke checks for migrations, health, seeded data, and the new tracking endpoints.
+- Validate the next Portainer deployment and fix any container/runtime regressions that show up there.
 
 ### Blockers/Concerns
 
 - App must be usable within 1-2 months before trip departure — tight timeline
-- 100k+ POI data volume requires PostGIS spatial indexes to be correct from Phase 1
-- The repo currently has no `frontend/` app despite the roadmap expecting a mobile PWA.
-- Alembic is configured but no migration file exists yet, so fresh deployments would start with an empty database schema.
+- 100k+ POI data volume still requires proper viewport queries and spatial index validation once the real map lands.
+- The current frontend is a static alpha shell, not yet the planned richer PWA client.
+- Real import jobs are still missing, so admin import actions remain informational.
 - Local Docker validation is currently blocked by Docker Desktop returning `500 Internal Server Error` on daemon API calls.
 
 ## Session Continuity
 
-Last session: 2026-03-17T20:05:00+01:00
-Stopped at: Deployment-first refocus after repo exploration
+Last session: 2026-03-17T22:15:00+01:00
+Stopped at: Alpha slice extended through trips, tracking, and admin workflows
 Resume file: .planning/DEPLOYMENT-FIRST.md

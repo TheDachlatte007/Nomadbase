@@ -95,26 +95,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFR-01 | Phase 1 | Pending |
+| INFR-01 | Phase 1 | Alpha |
 | INFR-02 | Phase 1 | Pending |
-| INFR-03 | Phase 1 | Pending |
-| INFR-04 | Phase 1 | Pending |
+| INFR-03 | Phase 1 | Alpha |
+| INFR-04 | Phase 1 | Alpha |
 | MAP-01 | Phase 2 | Pending |
-| MAP-02 | Phase 2 | Pending |
+| MAP-02 | Phase 2 | Partial alpha |
 | MAP-03 | Phase 2 | Pending |
-| SAVE-01 | Phase 2 | Pending |
-| SAVE-02 | Phase 2 | Pending |
-| TRIP-01 | Phase 3 | Pending |
-| TRIP-02 | Phase 3 | Pending |
+| SAVE-01 | Phase 2 | Alpha |
+| SAVE-02 | Phase 2 | Alpha |
+| TRIP-01 | Phase 3 | Alpha |
+| TRIP-02 | Phase 3 | Alpha |
 | TRIP-03 | Phase 3 | Pending |
 | TRIP-04 | Phase 3 | Pending |
-| TRAK-01 | Phase 4 | Pending |
-| TRAK-02 | Phase 4 | Pending |
-| TRAK-03 | Phase 4 | Pending |
+| TRAK-01 | Phase 4 | Alpha |
+| TRAK-02 | Phase 4 | Alpha |
+| TRAK-03 | Phase 4 | Alpha |
 | ADMN-01 | Phase 5 | Pending |
-| ADMN-02 | Phase 5 | Pending |
-| ADMN-03 | Phase 5 | Pending |
-| ADMN-04 | Phase 5 | Pending |
+| ADMN-02 | Phase 5 | Alpha |
+| ADMN-03 | Phase 5 | Alpha |
+| ADMN-04 | Phase 5 | Alpha |
 
 **Coverage:**
 - v1 requirements: 20 total
