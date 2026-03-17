@@ -30,7 +30,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. PostGIS extension is active and a sample OSM extract can be imported via the CLI pipeline
   4. Opening the app URL on mobile shows the PWA shell with a browser install prompt available
   5. All planned API route groups (map, saves, trips, tracking, admin) return 404 or stub responses — no 500s
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Docker Compose + PostGIS database + FastAPI skeleton with stub routes (INFR-01, INFR-03)
+- [ ] 01-02-PLAN.md — OSM data import pipeline: PBF parser, tag mapper, CLI tool, shell scripts (INFR-02)
+- [ ] 01-03-PLAN.md — PWA frontend shell: Vue 3 + Vite, bottom nav, light/dark mode, service worker (INFR-04)
 
 ### Phase 2: Map + Save
 **Goal**: Users can explore POIs on a live map, filter by type and lifestyle, and bookmark places with personal status and notes
@@ -85,7 +90,7 @@ Note: Phase 5 (Admin) depends only on Phase 1 and can run concurrently with Phas
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Infrastructure | 0/TBD | Not started | - |
+| 1. Infrastructure | 0/3 | Planning complete | - |
 | 2. Map + Save | 0/TBD | Not started | - |
 | 3. Trips | 0/TBD | Not started | - |
 | 4. Tracking | 0/TBD | Not started | - |
