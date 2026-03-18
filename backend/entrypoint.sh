@@ -4,7 +4,7 @@ set -eu
 echo "Running migrations..."
 alembic upgrade head
 
-if [ "${SEED_ALPHA_DATA:-true}" = "true" ]; then
+if [ "${SEED_ALPHA_DATA:-false}" = "true" ]; then
   echo "Seeding alpha sample data..."
   python -m app.seed_alpha
 fi

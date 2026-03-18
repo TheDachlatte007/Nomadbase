@@ -19,7 +19,7 @@ services:
   api:
     build: ./backend
     ports:
-      - "8097:8097"
+      - "8097:8000"
     depends_on:
       db:
         condition: service_healthy
