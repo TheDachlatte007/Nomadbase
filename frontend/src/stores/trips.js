@@ -44,5 +44,29 @@ export const useTripsStore = defineStore('trips', () => {
     }).catch(() => {})
   }
 
-  return { trips, loading, fetchTrips, createTrip, addCity }
+  async function removeCity(tripId, cityId) {
+    const res = await fetch(`/api/trips/${tripId}/cities/${cityId}`, {
+      method: 'DELETE',
+    })
+    if (!res.ok) throw new Error('Remove city failed')
+    await fetchTrips()
+  }
+
+  async function updateTrip(tripId, data) {
+    const res = await fetch(`/api/trips/${tripId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) throw new Error('Update trip failed')
+    await fetchTrips()
+  }
+
+  async function deleteTrip(tripId) {
+    const res = await fetch(`/api/trips/${tripId}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Delete trip failed')
+    trips.value = trips.value.filter((t) => t.id !== tripId)
+  }
+
+  return { trips, loading, fetchTrips, createTrip, addCity, removeCity, updateTrip, deleteTrip }
 })

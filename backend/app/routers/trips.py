@@ -13,6 +13,7 @@ from app.schemas.trip import (
     TripCreateRequest,
     TripListResponse,
     TripResponse,
+    TripUpdateRequest,
 )
 
 router = APIRouter()
@@ -106,6 +107,77 @@ async def create_trip(
     return TripResponse(**data)
 
 
+def _parse_trip_uuid(trip_id: str) -> "UUID":
+    try:
+        return UUID(trip_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="trip_id must be a valid UUID",
+        ) from exc
+
+
+@router.patch("/{trip_id}", response_model=TripResponse)
+async def update_trip(
+    trip_id: str,
+    payload: TripUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    trip_uuid = _parse_trip_uuid(trip_id)
+    trip = await db.get(Trip, trip_uuid)
+    if trip is None:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    if payload.name is not None:
+        trip.name = payload.name
+    if payload.start_date is not None:
+        trip.start_date = payload.start_date
+    if payload.end_date is not None:
+        trip.end_date = payload.end_date
+    if payload.notes is not None:
+        trip.notes = payload.notes
+
+    await db.commit()
+
+    result = await db.execute(_trip_stmt().where(Trip.id == trip_uuid))
+    data = _serialize_trip(result.all())[0]
+    return TripResponse(**data)
+
+
+@router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_trip(trip_id: str, db: AsyncSession = Depends(get_db)):
+    trip_uuid = _parse_trip_uuid(trip_id)
+    trip = await db.get(Trip, trip_uuid)
+    if trip is None:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    await db.delete(trip)
+    await db.commit()
+
+
+@router.delete(
+    "/{trip_id}/cities/{city_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def remove_city_from_trip(
+    trip_id: str,
+    city_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    trip_uuid = _parse_trip_uuid(trip_id)
+    try:
+        city_uuid = UUID(city_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="city_id must be a valid UUID",
+        ) from exc
+
+    city = await db.get(City, city_uuid)
+    if city is None or city.trip_id != trip_uuid:
+        raise HTTPException(status_code=404, detail="City not found")
+    await db.delete(city)
+    await db.commit()
+
+
 @router.post(
     "/{trip_id}/cities",
     response_model=TripResponse,
@@ -116,14 +188,7 @@ async def add_city_to_trip(
     payload: TripCityCreateRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    try:
-        trip_uuid = UUID(trip_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="trip_id must be a valid UUID",
-        ) from exc
-
+    trip_uuid = _parse_trip_uuid(trip_id)
     trip = await db.get(Trip, trip_uuid)
     if trip is None:
         raise HTTPException(status_code=404, detail="Trip not found")

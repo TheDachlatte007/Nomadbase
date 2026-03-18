@@ -1,6 +1,14 @@
 from datetime import date, datetime
+from typing import Optional
 
 from pydantic import BaseModel, Field
+
+
+class TripUpdateRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    notes: Optional[str] = Field(default=None, max_length=4000)
 
 
 class TripCityCreateRequest(BaseModel):

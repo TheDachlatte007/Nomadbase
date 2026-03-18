@@ -412,6 +412,34 @@ code {
   min-width: min(100%, 280px);
 }
 
+.trip-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.city-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.city-remove-btn {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.city-remove-btn:hover {
+  color: var(--accent);
+}
+
 .secondary-button {
   background: var(--surface-strong);
   color: var(--primary);
