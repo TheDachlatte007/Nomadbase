@@ -1,5 +1,8 @@
+import json
+
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import and_, cast, func, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
@@ -17,7 +20,7 @@ async def map_root():
     }
 
 
-def _base_place_select() -> Select:
+def _base_place_select():
     return select(
         Place.id,
         Place.name,
@@ -45,38 +48,62 @@ def _serialize_place(row) -> dict:
     }
 
 
+# Allowed tag filters mapped to the JSONB key/value pair they assert
+_ALLOWED_TAG_FILTERS: dict[str, dict[str, str]] = {
+    "vegan": {"diet:vegan": "yes"},
+    "vegetarian": {"diet:vegetarian": "yes"},
+    "outdoor_seating": {"outdoor_seating": "yes"},
+    "wifi": {"internet_access": "wlan"},
+    "wheelchair": {"wheelchair": "yes"},
+}
+
+
 @router.get("/places", response_model=PlaceListResponse)
 async def list_places(
     place_type: str | None = None,
     region: str | None = None,
     q: str | None = None,
-    limit: int = Query(default=24, ge=1, le=100),
+    tag_filters: str | None = Query(default=None, description="Comma-separated tag keys, e.g. vegan,outdoor_seating"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = _base_place_select().order_by(Place.name.asc()).limit(limit)
-
+    filters = []
     if place_type:
-        stmt = stmt.where(Place.place_type == place_type)
-
+        filters.append(Place.place_type == place_type)
     if region:
-        stmt = stmt.where(Place.region == region)
-
+        filters.append(Place.region == region)
     if q:
         pattern = f"%{q.strip()}%"
-        stmt = stmt.where(
+        filters.append(
             or_(
                 Place.name.ilike(pattern),
                 Place.description.ilike(pattern),
                 Place.region.ilike(pattern),
             )
         )
+    if tag_filters:
+        for key in tag_filters.split(","):
+            key = key.strip()
+            if key in _ALLOWED_TAG_FILTERS:
+                required = _ALLOWED_TAG_FILTERS[key]
+                filters.append(Place.tags.contains(cast(json.dumps(required), JSONB)))
+
+    count_stmt = select(func.count()).select_from(Place)
+    if filters:
+        count_stmt = count_stmt.where(and_(*filters))
+    total_available = (await db.execute(count_stmt)).scalar_one()
+
+    stmt = _base_place_select().order_by(Place.name.asc()).limit(limit).offset(offset)
+    if filters:
+        stmt = stmt.where(and_(*filters))
 
     result = await db.execute(stmt)
     rows = result.all()
     data = [_serialize_place(row) for row in rows]
     message = "Live alpha places" if data else "No places found for current filters"
 
-    return PlaceListResponse(data=data, total=len(data), message=message)
+    return PlaceListResponse(data=data, total=len(data), total_available=total_available, message=message)
 
 
 @router.get("/places/nearby", response_model=PlaceListResponse)

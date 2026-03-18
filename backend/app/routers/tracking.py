@@ -262,3 +262,23 @@ async def log_visit(
 
     result = await db.execute(_visit_stmt().where(Visit.id == visit.id))
     return VisitResponse(**_serialize_visit(result.one()))
+
+
+@router.delete("/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_expense(expense_id: str, db: AsyncSession = Depends(get_db)):
+    expense_uuid = _parse_uuid(expense_id, "expense_id")
+    expense = await db.get(Expense, expense_uuid)
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    await db.delete(expense)
+    await db.commit()
+
+
+@router.delete("/visits/{visit_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_visit(visit_id: str, db: AsyncSession = Depends(get_db)):
+    visit_uuid = _parse_uuid(visit_id, "visit_id")
+    visit = await db.get(Visit, visit_uuid)
+    if visit is None:
+        raise HTTPException(status_code=404, detail="Visit not found")
+    await db.delete(visit)
+    await db.commit()

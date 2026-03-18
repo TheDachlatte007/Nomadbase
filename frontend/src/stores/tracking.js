@@ -43,5 +43,18 @@ export const useTrackingStore = defineStore('tracking', () => {
     await fetchAll()
   }
 
-  return { expenses, visits, summary, loading, fetchAll, addExpense, addVisit }
+  async function deleteExpense(id) {
+    const res = await fetch(`/api/tracking/expenses/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Delete expense failed')
+    expenses.value = expenses.value.filter((e) => e.id !== id)
+    await fetchAll() // refresh summary
+  }
+
+  async function deleteVisit(id) {
+    const res = await fetch(`/api/tracking/visits/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Delete visit failed')
+    visits.value = visits.value.filter((v) => v.id !== id)
+  }
+
+  return { expenses, visits, summary, loading, fetchAll, addExpense, addVisit, deleteExpense, deleteVisit }
 })

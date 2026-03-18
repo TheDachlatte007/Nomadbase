@@ -22,13 +22,22 @@
             @click="onNearMe"
           >{{ nearMeText }}</button>
         </form>
+        <div class="tag-filter-row">
+          <span
+            v-for="chip in TAG_CHIPS"
+            :key="chip.key"
+            class="chip tag-chip"
+            :class="{ active: activeTagFilters.has(chip.key) }"
+            @click="toggleTagFilter(chip.key)"
+          >{{ chip.label }}</span>
+        </div>
       </div>
 
       <div ref="mapEl" id="map-view"></div>
 
       <div class="places-grid">
-        <p v-if="loading" class="empty-state">Loading places...</p>
-        <p v-else-if="!places.length" class="empty-state">No places matched the current filters.</p>
+        <p v-if="loading && !places.length" class="empty-state">Loading places...</p>
+        <p v-else-if="!loading && !places.length" class="empty-state">No places matched the current filters.</p>
         <article
           v-for="place in places"
           :key="place.id"
@@ -56,6 +65,16 @@
           </form>
         </article>
       </div>
+
+      <div v-if="places.length" class="load-more-row">
+        <p class="muted">Showing {{ places.length }} of {{ totalAvailable }} places</p>
+        <button
+          v-if="hasMore"
+          class="action-button secondary-button"
+          :disabled="loading"
+          @click="onLoadMore"
+        >{{ loading ? 'Loading…' : 'Load more' }}</button>
+      </div>
     </article>
 
     <article class="callout-card">
@@ -69,6 +88,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, reactive } from 'vue'
 import L from 'leaflet'
+import 'leaflet.markercluster'
 import { usePlacesStore } from '../stores/places.js'
 import { useSavedStore } from '../stores/saved.js'
 import { useAdminStore } from '../stores/admin.js'
@@ -79,11 +99,22 @@ const adminStore = useAdminStore()
 
 const places = computed(() => placesStore.places)
 const loading = computed(() => placesStore.loading)
+const hasMore = computed(() => placesStore.hasMore)
+const totalAvailable = computed(() => placesStore.totalAvailable)
 const searchQuery = ref('')
 const placeType = ref('')
 const nearMeText = ref('Near me')
 const nearMeLoading = ref(false)
 const mapEl = ref(null)
+
+const TAG_CHIPS = [
+  { key: 'vegan', label: 'Vegan' },
+  { key: 'vegetarian', label: 'Vegetarian' },
+  { key: 'outdoor_seating', label: 'Outdoor seating' },
+  { key: 'wifi', label: 'WiFi' },
+  { key: 'wheelchair', label: 'Wheelchair' },
+]
+const activeTagFilters = reactive(new Set())
 
 const healthTitle = computed(() => {
   if (adminStore.health === 'ok') return 'Backend is responding.'
@@ -124,6 +155,7 @@ const TYPE_COLORS = {
 }
 
 let map = null
+let clusterGroup = null
 const placeMarkers = new Map()
 let userMarker = null
 
@@ -137,20 +169,26 @@ function makeMarkerIcon(type) {
 }
 
 function syncMarkers(newPlaces) {
-  if (!map) return
+  if (!map || !clusterGroup) return
+
   const currentIds = new Set(newPlaces.map((p) => p.id))
+
+  // Remove stale markers
   for (const [id, marker] of placeMarkers) {
     if (!currentIds.has(id)) {
-      marker.remove()
+      clusterGroup.removeLayer(marker)
       placeMarkers.delete(id)
     }
   }
+
+  // Add new markers to cluster group
+  const toAdd = []
   for (const place of newPlaces) {
     if (placeMarkers.has(place.id)) continue
     const marker = L.marker([place.lat, place.lon], {
       icon: makeMarkerIcon(place.place_type),
       title: place.name,
-    }).addTo(map)
+    })
     marker.bindPopup(
       `<strong>${place.name}</strong><br>
        <span style="color:#5f6d69;font-size:.9em">${place.place_type}${place.region ? ` · ${place.region}` : ''}</span>
@@ -166,8 +204,12 @@ function syncMarkers(newPlaces) {
       }
     })
     placeMarkers.set(place.id, marker)
+    toAdd.push(marker)
   }
-  if (newPlaces.length > 0) {
+  if (toAdd.length) clusterGroup.addLayers(toAdd)
+
+  // Fit bounds
+  if (newPlaces.length > 0 && placeMarkers.size > 0) {
     const group = L.featureGroup([...placeMarkers.values()])
     map.fitBounds(group.getBounds().pad(0.2))
   }
@@ -181,17 +223,41 @@ onMounted(() => {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 19,
   }).addTo(map)
+
+  clusterGroup = L.markerClusterGroup({
+    chunkedLoading: true,
+    maxClusterRadius: 60,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+  })
+  map.addLayer(clusterGroup)
+
   if (places.value.length > 0) syncMarkers(places.value)
 })
 
 onUnmounted(() => {
   map?.remove()
   map = null
+  clusterGroup = null
   placeMarkers.clear()
 })
 
+function toggleTagFilter(key) {
+  if (activeTagFilters.has(key)) {
+    activeTagFilters.delete(key)
+  } else {
+    activeTagFilters.add(key)
+  }
+  onSearch()
+}
+
 async function onSearch() {
-  await placesStore.fetchPlaces(searchQuery.value, placeType.value)
+  const tagStr = [...activeTagFilters].join(',')
+  await placesStore.fetchPlaces(searchQuery.value, placeType.value, tagStr)
+}
+
+async function onLoadMore() {
+  await placesStore.loadMore()
 }
 
 async function onNearMe() {

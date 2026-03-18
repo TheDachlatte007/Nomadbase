@@ -16,4 +16,5 @@ class PlaceSummary(BaseModel):
 class PlaceListResponse(BaseModel):
     data: list[PlaceSummary]
     total: int
+    total_available: int = 0
     message: str

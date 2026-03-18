@@ -78,6 +78,9 @@
               <div class="chip-row">
                 <span v-if="exp.place_name" class="chip">{{ exp.place_name }}</span>
               </div>
+              <button class="unsave-button" :disabled="deletingExpense === exp.id" @click="onDeleteExpense(exp.id)">
+                {{ deletingExpense === exp.id ? '…' : 'Delete' }}
+              </button>
             </article>
           </div>
         </div>
@@ -95,6 +98,9 @@
               <div class="chip-row">
                 <span v-if="vis.trip_name" class="chip">{{ vis.trip_name }}</span>
               </div>
+              <button class="unsave-button" :disabled="deletingVisit === vis.id" @click="onDeleteVisit(vis.id)">
+                {{ deletingVisit === vis.id ? '…' : 'Delete' }}
+              </button>
             </article>
           </div>
         </div>
@@ -153,6 +159,18 @@ const expFeedback = ref('')
 const visFeedback = ref('')
 const saving = ref(false)
 const logging = ref(false)
+const deletingExpense = ref(null)
+const deletingVisit = ref(null)
+
+async function onDeleteExpense(id) {
+  deletingExpense.value = id
+  try { await trackingStore.deleteExpense(id) } finally { deletingExpense.value = null }
+}
+
+async function onDeleteVisit(id) {
+  deletingVisit.value = id
+  try { await trackingStore.deleteVisit(id) } finally { deletingVisit.value = null }
+}
 
 function formatDate(value) {
   if (!value) return 'not set'
