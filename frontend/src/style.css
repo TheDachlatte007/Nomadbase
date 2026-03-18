@@ -414,6 +414,16 @@ code {
   gap: 12px;
 }
 
+.offline-banner {
+  background: #fef3cd;
+  color: #7a5800;
+  border: 1px solid #f0d080;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
 .tag-filter-row {
   display: flex;
   flex-wrap: wrap;

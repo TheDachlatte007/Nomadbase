@@ -1,5 +1,13 @@
 <template>
   <div class="panel active" style="display:grid">
+    <div v-if="placesStore.isOffline" class="offline-banner">
+      <span v-if="placesStore.cacheSource">
+        Offline — showing cached data
+        <span class="muted">({{ placesStore.cacheSource === 'all' ? 'full cache' : placesStore.cacheSource }})</span>
+      </span>
+      <span v-else>Offline — no cached data available for this filter</span>
+    </div>
+
     <article class="info-card wide-card map-card">
       <div class="map-toolbar">
         <form class="toolbar" @submit.prevent="onSearch">

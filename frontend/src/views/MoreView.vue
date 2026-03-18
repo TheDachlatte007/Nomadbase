@@ -29,6 +29,23 @@
     </article>
 
     <article class="info-card">
+      <p class="card-eyebrow">Offline cache</p>
+      <h3>What's stored on this device.</h3>
+      <p class="muted" style="margin-bottom:12px">Places are cached in IndexedDB when loaded online and served offline for up to 7 days.</p>
+      <div v-if="cacheLoading" class="empty-state">Loading cache info...</div>
+      <div v-else-if="!cacheEntries.length" class="empty-state">No cached data yet — search places while online to populate the cache.</div>
+      <div v-else class="imports-list">
+        <div v-for="entry in cacheEntries" :key="entry.key" class="import-item">
+          <div>
+            <strong>{{ entry.key }}</strong>
+            <p class="muted">{{ entry.count }} places · cached {{ formatAge(entry.cachedAt) }}</p>
+          </div>
+          <button class="action-button secondary-button" style="font-size:.8rem;padding:4px 10px" @click="onDeleteCache(entry.key)">Clear</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="info-card">
       <p class="card-eyebrow">Deployment notes</p>
       <h3>Built for a private homeserver setup.</h3>
       <ul class="simple-list">
@@ -75,8 +92,9 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch } from 'vue'
+import { ref, computed, reactive, watch, onMounted } from 'vue'
 import { useAdminStore } from '../stores/admin.js'
+import { listCacheEntries, deleteCache } from '../utils/offlineDb.js'
 
 const adminStore = useAdminStore()
 const imports = computed(() => adminStore.imports)
@@ -126,6 +144,37 @@ async function onSavePreferences() {
     savingPrefs.value = false
   }
 }
+
+// Offline cache
+const cacheEntries = ref([])
+const cacheLoading = ref(false)
+
+function formatAge(ts) {
+  const mins = Math.round((Date.now() - ts) / 60000)
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.round(hrs / 24)}d ago`
+}
+
+async function loadCacheEntries() {
+  cacheLoading.value = true
+  try {
+    cacheEntries.value = await listCacheEntries()
+    cacheEntries.value.sort((a, b) => b.cachedAt - a.cachedAt)
+  } catch {
+    cacheEntries.value = []
+  } finally {
+    cacheLoading.value = false
+  }
+}
+
+async function onDeleteCache(key) {
+  await deleteCache(key).catch(() => {})
+  await loadCacheEntries()
+}
+
+onMounted(loadCacheEntries)
 
 // Import
 const importForm = reactive({ city: '', country: '' })

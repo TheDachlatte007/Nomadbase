@@ -65,9 +65,10 @@ const pillStyle = computed(() => {
 
 onMounted(async () => {
   await adminStore.checkHealth()
+  // Always fetch places — the store falls back to IndexedDB when offline
+  await placesStore.fetchPlaces()
   if (adminStore.health !== 'offline') {
     await Promise.all([
-      placesStore.fetchPlaces(),
       savedStore.fetchSaved(),
       tripsStore.fetchTrips(),
       trackingStore.fetchAll(),
