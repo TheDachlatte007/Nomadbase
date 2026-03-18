@@ -15,6 +15,7 @@
           <button class="action-button" type="submit" :disabled="creating">
             {{ creating ? 'Creating...' : 'Create trip' }}
           </button>
+          <p v-if="createFeedback" class="feedback">{{ createFeedback }}</p>
         </form>
       </div>
 
@@ -103,10 +104,12 @@ const loading = computed(() => tripsStore.loading)
 
 // Create form
 const creating = ref(false)
+const createFeedback = ref('')
 const form = reactive({ name: '', start_date: '', end_date: '', notes: '' })
 
 async function onCreate() {
   creating.value = true
+  createFeedback.value = ''
   try {
     await tripsStore.createTrip({
       name: form.name,
@@ -115,6 +118,10 @@ async function onCreate() {
       notes: form.notes || null,
     })
     Object.assign(form, { name: '', start_date: '', end_date: '', notes: '' })
+    createFeedback.value = 'Trip created!'
+    setTimeout(() => { createFeedback.value = '' }, 3000)
+  } catch (e) {
+    createFeedback.value = `Failed: ${e.message}`
   } finally {
     creating.value = false
   }

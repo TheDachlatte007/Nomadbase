@@ -15,7 +15,7 @@
           <option v-for="trip in trips" :key="trip.id" :value="trip.id">{{ trip.name }}</option>
         </select>
         <select v-model="expForm.place_id">
-          <option value="">No linked place</option>
+          <option value="">{{ allPlaces.length ? 'No linked place' : 'No places yet — import a city in More' }}</option>
           <option v-for="place in allPlaces" :key="place.id" :value="place.id">
             {{ place.name }}{{ place.region ? ` (${place.region})` : '' }}
           </option>
@@ -30,8 +30,11 @@
       <p class="card-eyebrow">Visits</p>
       <h3>Log where you actually went.</h3>
       <form class="tracking-form" @submit.prevent="onVisit">
-        <select v-model="visForm.place_id" required>
-          <option value="">Choose a place</option>
+        <p v-if="!allPlaces.length" class="feedback" style="margin-bottom:8px">
+          No places loaded yet. Import a city in the <strong>More</strong> tab first, or search in the Map tab.
+        </p>
+        <select v-model="visForm.place_id" required :disabled="!allPlaces.length">
+          <option value="">{{ allPlaces.length ? 'Choose a place' : 'No places available' }}</option>
           <option v-for="place in allPlaces" :key="place.id" :value="place.id">
             {{ place.name }}{{ place.region ? ` (${place.region})` : '' }}
           </option>
@@ -205,8 +208,8 @@ async function onExpense() {
       description: '',
     })
     expFeedback.value = 'Recorded'
-  } catch {
-    expFeedback.value = 'Save failed'
+  } catch (e) {
+    expFeedback.value = `Failed: ${e.message}`
   } finally {
     saving.value = false
   }
@@ -224,8 +227,8 @@ async function onVisit() {
     })
     Object.assign(visForm, { place_id: '', trip_id: '', visited_at: '', notes: '' })
     visFeedback.value = 'Logged'
-  } catch {
-    visFeedback.value = 'Log failed'
+  } catch (e) {
+    visFeedback.value = `Failed: ${e.message}`
   } finally {
     logging.value = false
   }
