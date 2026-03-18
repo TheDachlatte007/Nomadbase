@@ -44,9 +44,9 @@ TAG_TYPE_MAP: dict[tuple[str, str], str] = {
     ("natural", "cave_entrance"): "hiking",
 }
 
-# Overpass union filter lines (nodes + ways + relations for each tag)
+# Overpass union filter lines — only named POIs (unnamed ones are discarded anyway)
 _FILTERS = [
-    f'nwr["{k}"="{v}"]'
+    f'nwr["{k}"="{v}"]["name"]'
     for k, v in TAG_TYPE_MAP
 ]
 
@@ -55,7 +55,7 @@ def _overpass_query(south: float, west: float, north: float, east: float) -> str
     bbox = f"{south},{west},{north},{east}"
     filters = "\n  ".join(f"{f}({bbox});" for f in _FILTERS)
     return f"""
-[out:json][timeout:60];
+[out:json][timeout:90][maxsize:104857600];
 (
   {filters}
 );
@@ -141,7 +141,7 @@ async def geocode_city(city: str, country: str | None = None) -> dict | None:
     ) as client:
         resp = await client.get(
             NOMINATIM_URL,
-            params={"q": query, "format": "json", "limit": 1, "featuretype": "city"},
+            params={"q": query, "format": "json", "limit": 1},
         )
         resp.raise_for_status()
         results = resp.json()
@@ -165,7 +165,7 @@ async def geocode_city(city: str, country: str | None = None) -> dict | None:
 async def fetch_overpass(bbox: dict) -> list[dict]:
     """Queries Overpass and returns raw elements."""
     query = _overpass_query(bbox["south"], bbox["west"], bbox["north"], bbox["east"])
-    async with httpx.AsyncClient(timeout=90) as client:
+    async with httpx.AsyncClient(timeout=150) as client:
         resp = await client.post(OVERPASS_URL, data={"data": query})
         resp.raise_for_status()
         return resp.json().get("elements", [])

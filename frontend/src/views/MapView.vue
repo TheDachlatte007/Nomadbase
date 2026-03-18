@@ -11,7 +11,7 @@
     <article class="info-card wide-card map-card">
       <div class="map-toolbar">
         <form class="toolbar" @submit.prevent="onSearch">
-          <input v-model="searchQuery" type="search" placeholder="Search places or regions">
+          <input v-model="searchQuery" type="search" placeholder="Search places or city…">
           <select v-model="placeType">
             <option value="">All types</option>
             <option value="park">Park</option>
@@ -44,15 +44,28 @@
       <div ref="mapEl" id="map-view"></div>
 
       <div class="places-grid">
-        <p v-if="loading && !places.length" class="empty-state">Loading places...</p>
-        <p v-else-if="!loading && !places.length" class="empty-state">No places matched the current filters.</p>
+        <p v-if="loading && !places.length" class="empty-state">Loading places…</p>
+        <div v-else-if="!loading && !places.length" class="empty-state-wrap">
+          <p class="empty-state">No places found{{ searchQuery ? ` for "${searchQuery}"` : ' for the current filters' }}.</p>
+          <template v-if="searchQuery && !activeTagFilters.size">
+            <p class="muted" style="font-size:.88rem;margin:4px 0 8px">Not in the database yet? Import from OpenStreetMap:</p>
+            <button
+              class="action-button secondary-button"
+              style="width:fit-content"
+              :disabled="importing"
+              @click="onInlineImport"
+            >{{ importing ? 'Importing from OSM…' : `Import "${searchQuery}"` }}</button>
+            <p v-if="importFeedback" class="feedback">{{ importFeedback }}</p>
+          </template>
+        </div>
         <article
           v-for="place in places"
           :key="place.id"
-          class="place-card"
+          class="place-card place-card--clickable"
           :data-place-id="place.id"
+          @click.self="focusOnMap(place)"
         >
-          <div>
+          <div @click="focusOnMap(place)" style="cursor:pointer">
             <p class="card-eyebrow">{{ place.region || 'unknown region' }}</p>
             <h4>{{ place.name }}</h4>
             <p class="muted">{{ place.place_type }} · {{ place.lat.toFixed(3) }}, {{ place.lon.toFixed(3) }}</p>
@@ -60,6 +73,7 @@
           <p>{{ place.description || 'No description yet.' }}</p>
           <div class="chip-row">
             <span class="chip">{{ place.place_type }}</span>
+            <span v-for="tag in getDisplayTags(place)" :key="tag" class="chip chip--tag">{{ tag }}</span>
           </div>
           <form class="save-form" @submit.prevent="onSavePlace(place)">
             <select v-model="saveForms[place.id].status">
@@ -115,6 +129,10 @@ const nearMeText = ref('Near me')
 const nearMeLoading = ref(false)
 const mapEl = ref(null)
 
+// Inline import state
+const importing = ref(false)
+const importFeedback = ref('')
+
 const TAG_CHIPS = [
   { key: 'vegan', label: 'Vegan' },
   { key: 'vegetarian', label: 'Vegetarian' },
@@ -151,6 +169,19 @@ watch(
   { immediate: true }
 )
 
+// Extract up to 3 useful display tags from a place
+function getDisplayTags(place) {
+  const t = place.tags || {}
+  const chips = []
+  if (t.cuisine) chips.push(t.cuisine.replace(/_/g, ' '))
+  if (t['diet:vegan'] === 'yes') chips.push('vegan')
+  if (t['diet:vegetarian'] === 'yes') chips.push('vegetarian')
+  if (t.outdoor_seating === 'yes') chips.push('outdoor')
+  if (t['internet_access'] === 'wlan') chips.push('wifi')
+  if (t.wheelchair === 'yes') chips.push('wheelchair')
+  return chips.slice(0, 3)
+}
+
 // --- Leaflet ---
 const TYPE_COLORS = {
   park: '#2d7a2d',
@@ -174,6 +205,18 @@ function makeMarkerIcon(type) {
     <circle cx="12" cy="12" r="5" fill="white"/>
   </svg>`
   return L.divIcon({ html: svg, className: '', iconSize: [24, 34], iconAnchor: [12, 34], popupAnchor: [0, -34] })
+}
+
+function focusOnMap(place) {
+  if (!map || !clusterGroup) return
+  const marker = placeMarkers.get(place.id)
+  if (marker) {
+    clusterGroup.zoomToShowLayer(marker, () => {
+      marker.openPopup()
+    })
+  } else {
+    map.setView([place.lat, place.lon], 15, { animate: true })
+  }
 }
 
 function syncMarkers(newPlaces) {
@@ -260,6 +303,7 @@ function toggleTagFilter(key) {
 }
 
 async function onSearch() {
+  importFeedback.value = ''
   const tagStr = [...activeTagFilters].join(',')
   await placesStore.fetchPlaces(searchQuery.value, placeType.value, tagStr)
 }
@@ -307,6 +351,25 @@ async function onNearMe() {
     },
     { timeout: 8000 }
   )
+}
+
+async function onInlineImport() {
+  if (!searchQuery.value || importing.value) return
+  importing.value = true
+  importFeedback.value = `Fetching OSM data for "${searchQuery.value}"… this may take up to 60s.`
+  try {
+    const result = await adminStore.importCity(searchQuery.value, null)
+    if (result.imported === 0) {
+      importFeedback.value = `No named places found for "${searchQuery.value}". Try a different spelling or add the country (e.g. go to More → Import).`
+    } else {
+      importFeedback.value = `Imported ${result.imported} places for ${result.region}. Loading…`
+      await onSearch()
+    }
+  } catch (e) {
+    importFeedback.value = `Import failed: ${e.message}`
+  } finally {
+    importing.value = false
+  }
 }
 
 async function onSavePlace(place) {

@@ -257,6 +257,16 @@ code {
   padding: 16px;
   display: grid;
   gap: 12px;
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.place-card--clickable {
+  cursor: pointer;
+}
+
+.place-card--clickable:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 18px rgba(15, 92, 82, 0.12);
 }
 
 .place-card h4,
@@ -322,6 +332,18 @@ code {
   margin: 0;
 }
 
+.empty-state-wrap {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.chip--tag {
+  background: rgba(200, 111, 49, 0.10);
+  color: var(--accent);
+  text-transform: capitalize;
+}
+
 .feedback {
   font-size: 0.88rem;
   color: var(--primary);
@@ -384,7 +406,7 @@ code {
 }
 
 #map-view {
-  height: 360px;
+  height: 460px;
   width: 100%;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);

@@ -125,6 +125,6 @@ async def nearby_places(
     result = await db.execute(stmt)
     rows = result.all()
     data = [_serialize_place(row) for row in rows]
-    message = "Nearby alpha places" if data else "No nearby places found"
+    message = "Nearby places" if data else "No nearby places found"
 
-    return PlaceListResponse(data=data, total=len(data), message=message)
+    return PlaceListResponse(data=data, total=len(data), total_available=len(data), message=message)

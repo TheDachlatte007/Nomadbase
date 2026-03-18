@@ -8,7 +8,7 @@ class PlaceSummary(BaseModel):
     description: str | None = None
     region: str | None = None
     source: str
-    tags: dict[str, bool] = {}
+    tags: dict = {}
     lat: float
     lon: float
 
