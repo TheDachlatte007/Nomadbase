@@ -81,7 +81,20 @@
 
         <div class="tracking-sections">
           <section class="info-card">
-            <p class="card-eyebrow">Shared expense</p>
+            <div class="stack-between stack-between--tight">
+              <div>
+                <p class="card-eyebrow">Shared expense</p>
+                <h4>{{ editingExpenseId ? 'Edit expense' : 'Log a new expense' }}</h4>
+              </div>
+              <button
+                v-if="editingExpenseId"
+                class="secondary-button action-button"
+                type="button"
+                @click="resetExpenseForm()"
+              >
+                Cancel edit
+              </button>
+            </div>
             <form class="tracking-form" @submit.prevent="onAddExpense">
               <input
                 v-model="expForm.amount"
@@ -181,7 +194,7 @@
                 type="submit"
                 :disabled="savingExpense || !canSubmitExpense"
               >
-                {{ savingExpense ? 'Saving...' : 'Log expense' }}
+                {{ savingExpense ? 'Saving...' : expenseSubmitLabel }}
               </button>
               <p v-if="expenseFeedback" class="feedback">{{ expenseFeedback }}</p>
               <p v-if="expenseHint" class="muted">{{ expenseHint }}</p>
@@ -300,7 +313,12 @@
                 <article v-if="expenses.length" v-for="expense in expenses" :key="expense.id" class="summary-item">
                   <div class="stack-between">
                     <strong>{{ expense.category }}</strong>
-                    <button class="unsave-button" type="button" @click="onDeleteExpense(expense.id)">Delete</button>
+                    <div class="entry-actions">
+                      <button class="secondary-button action-button" type="button" @click="onEditExpense(expense)">
+                        Edit
+                      </button>
+                      <button class="unsave-button" type="button" @click="onDeleteExpense(expense.id)">Delete</button>
+                    </div>
                   </div>
                   <span>{{ formatMoney(expense.amount, expense.currency) }}</span>
                   <div class="chip-row">
@@ -422,12 +440,14 @@ const savingExpense = ref(false)
 const savingVisit = ref(false)
 const expenseFeedback = ref('')
 const visitFeedback = ref('')
+const editingExpenseId = ref('')
 
 const canSubmitExpense = computed(() => {
   if (!activeTrip.value) return false
   if (!activeParticipants.value.length) return false
   return true
 })
+const expenseSubmitLabel = computed(() => (editingExpenseId.value ? 'Save changes' : 'Log expense'))
 
 const expenseHint = computed(() => {
   if (!activeTrip.value) return 'Select a trip first.'
@@ -444,6 +464,7 @@ watch(
     visForm.trip_id = tripId || ''
     expenseFeedback.value = ''
     visitFeedback.value = ''
+    resetExpenseForm()
     await trackingStore.fetchAll(tripId || '')
   },
   { immediate: true }
@@ -497,6 +518,30 @@ function clearSplitParticipants() {
   expForm.split_participant_ids = []
 }
 
+function resetExpenseForm() {
+  editingExpenseId.value = ''
+  expForm.amount = ''
+  expForm.currency = 'EUR'
+  expForm.category = ''
+  expForm.description = ''
+  expForm.date = today
+  expForm.place_id = ''
+  expForm.paid_by_participant_id = activeParticipants.value[0]?.id || ''
+  expForm.split_participant_ids = activeParticipants.value.map((participant) => participant.id)
+}
+
+function loadExpenseIntoForm(expense) {
+  editingExpenseId.value = expense.id
+  expForm.amount = String(expense.amount ?? '')
+  expForm.currency = expense.currency || 'EUR'
+  expForm.category = expense.category || ''
+  expForm.description = expense.description || ''
+  expForm.date = expense.date || today
+  expForm.place_id = expense.place_id || ''
+  expForm.paid_by_participant_id = expense.paid_by_participant_id || ''
+  expForm.split_participant_ids = [...(expense.split_participant_ids || [])]
+}
+
 async function onAddExpense() {
   expenseFeedback.value = ''
   if (!activeTrip.value) {
@@ -518,7 +563,7 @@ async function onAddExpense() {
 
   savingExpense.value = true
   try {
-    await trackingStore.addExpense({
+    const payload = {
       amount: Number(expForm.amount),
       currency: expForm.currency.toUpperCase(),
       category: expForm.category,
@@ -528,16 +573,19 @@ async function onAddExpense() {
       place_id: expForm.place_id || null,
       paid_by_participant_id: expForm.paid_by_participant_id,
       split_participant_ids: expForm.split_participant_ids,
-    })
-    expForm.amount = ''
-    expForm.category = ''
-    expForm.description = ''
-    expForm.place_id = ''
-    expForm.date = today
-    selectAllParticipants()
-    expenseFeedback.value = 'Expense logged.'
+    }
+
+    if (editingExpenseId.value) {
+      await trackingStore.updateExpense(editingExpenseId.value, payload)
+      expenseFeedback.value = 'Expense updated.'
+    } else {
+      await trackingStore.addExpense(payload)
+      expenseFeedback.value = 'Expense logged.'
+    }
+
+    resetExpenseForm()
   } catch (error) {
-    expenseFeedback.value = error.message || 'Could not log expense.'
+    expenseFeedback.value = error.message || 'Could not save expense.'
   } finally {
     savingExpense.value = false
   }
@@ -571,10 +619,17 @@ async function onAddVisit() {
 
 async function onDeleteExpense(id) {
   await trackingStore.deleteExpense(id)
+  if (editingExpenseId.value === id) {
+    resetExpenseForm()
+  }
 }
 
 async function onDeleteVisit(id) {
   await trackingStore.deleteVisit(id)
+}
+
+function onEditExpense(expense) {
+  loadExpenseIntoForm(expense)
 }
 
 function formatMoney(amount, currency = 'EUR') {

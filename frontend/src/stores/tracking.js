@@ -72,6 +72,18 @@ export const useTrackingStore = defineStore('tracking', () => {
     await fetchAll(data.trip_id || currentTripId.value)
   }
 
+  async function updateExpense(id, data) {
+    const res = await fetch(`/api/tracking/expenses/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      throw new Error(await readError(res, 'Update expense failed'))
+    }
+    await fetchAll(data.trip_id || currentTripId.value)
+  }
+
   async function addVisit(data) {
     const res = await fetch('/api/tracking/visits', {
       method: 'POST',
@@ -104,6 +116,7 @@ export const useTrackingStore = defineStore('tracking', () => {
     fetchAll,
     fetchSettlements,
     addExpense,
+    updateExpense,
     addVisit,
     deleteExpense,
     deleteVisit,

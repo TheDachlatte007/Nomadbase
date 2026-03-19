@@ -19,6 +19,7 @@ from app.schemas.tracking import (
     ExpenseListResponse,
     ExpenseResponse,
     ExpenseSummaryResponse,
+    ExpenseUpdateRequest,
     TripBalanceParticipant,
     TripSettlementCurrencyGroup,
     TripSettlementResponse,
@@ -265,6 +266,92 @@ def _build_settlement_transfers(participants: list[dict]) -> list[dict]:
     return transfers
 
 
+async def _prepare_expense_payload(
+    db: AsyncSession,
+    payload: ExpenseCreateRequest | ExpenseUpdateRequest,
+) -> tuple[dict, list[UUID]]:
+    place_uuid = _parse_uuid(payload.place_id, "place_id") if payload.place_id else None
+    trip_uuid = _parse_uuid(payload.trip_id, "trip_id") if payload.trip_id else None
+    paid_by_uuid = (
+        _parse_uuid(payload.paid_by_participant_id, "paid_by_participant_id")
+        if payload.paid_by_participant_id
+        else None
+    )
+    split_participant_ids = [
+        _parse_uuid(participant_id, "split_participant_ids")
+        for participant_id in payload.split_participant_ids
+    ]
+
+    if place_uuid:
+        await _require_place(db, place_uuid)
+
+    trip_participants: dict[UUID, TripParticipant] = {}
+    if trip_uuid:
+        await _require_trip(db, trip_uuid)
+        trip_participants = await _load_trip_participants(db, trip_uuid)
+
+    if (paid_by_uuid or split_participant_ids) and not trip_uuid:
+        raise HTTPException(
+            status_code=422,
+            detail="Participant-based expense splitting requires a linked trip",
+        )
+
+    if paid_by_uuid and paid_by_uuid not in trip_participants:
+        raise HTTPException(status_code=404, detail="Paying participant not found")
+
+    if split_participant_ids:
+        invalid_ids = [
+            participant_id
+            for participant_id in split_participant_ids
+            if participant_id not in trip_participants
+        ]
+        if invalid_ids:
+            raise HTTPException(status_code=404, detail="Split participant not found")
+
+    split_targets = split_participant_ids.copy()
+    if trip_uuid and paid_by_uuid and not split_targets:
+        split_targets = [paid_by_uuid]
+
+    expense_fields = {
+        "amount": payload.amount,
+        "currency": payload.currency.upper(),
+        "category": payload.category,
+        "description": payload.description,
+        "place_id": place_uuid,
+        "trip_id": trip_uuid,
+        "paid_by_participant_id": paid_by_uuid,
+    }
+    if payload.date is not None:
+        expense_fields["date"] = payload.date
+    return expense_fields, split_targets
+
+
+async def _replace_expense_splits(
+    db: AsyncSession,
+    expense_id: UUID,
+    amount: Decimal,
+    participant_ids: list[UUID],
+) -> None:
+    existing = await db.execute(
+        select(ExpenseSplit).where(ExpenseSplit.expense_id == expense_id)
+    )
+    for split in existing.scalars().all():
+        await db.delete(split)
+
+    if not participant_ids:
+        return
+
+    split_map = _split_amount_evenly(amount, participant_ids)
+    for participant_id, share_amount in split_map.items():
+        db.add(
+            ExpenseSplit(
+                expense_id=expense_id,
+                participant_id=participant_id,
+                share_amount=share_amount,
+            )
+        )
+
+
 @router.get("/expenses/summary", response_model=ExpenseSummaryResponse)
 async def expense_summary(
     trip_id: str | None = None,
@@ -436,78 +523,45 @@ async def record_expense(
     payload: ExpenseCreateRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    place_uuid = _parse_uuid(payload.place_id, "place_id") if payload.place_id else None
-    trip_uuid = _parse_uuid(payload.trip_id, "trip_id") if payload.trip_id else None
-    paid_by_uuid = (
-        _parse_uuid(payload.paid_by_participant_id, "paid_by_participant_id")
-        if payload.paid_by_participant_id
-        else None
-    )
-    split_participant_ids = [
-        _parse_uuid(participant_id, "split_participant_ids")
-        for participant_id in payload.split_participant_ids
-    ]
-
-    if place_uuid:
-        await _require_place(db, place_uuid)
-
-    trip_participants: dict[UUID, TripParticipant] = {}
-    if trip_uuid:
-        await _require_trip(db, trip_uuid)
-        trip_participants = await _load_trip_participants(db, trip_uuid)
-
-    if (paid_by_uuid or split_participant_ids) and not trip_uuid:
-        raise HTTPException(
-            status_code=422,
-            detail="Participant-based expense splitting requires a linked trip",
-        )
-
-    if paid_by_uuid and paid_by_uuid not in trip_participants:
-        raise HTTPException(status_code=404, detail="Paying participant not found")
-
-    if split_participant_ids:
-        invalid_ids = [
-            participant_id
-            for participant_id in split_participant_ids
-            if participant_id not in trip_participants
-        ]
-        if invalid_ids:
-            raise HTTPException(status_code=404, detail="Split participant not found")
-
-    split_targets = split_participant_ids.copy()
-    if trip_uuid and paid_by_uuid and not split_targets:
-        split_targets = [paid_by_uuid]
-
-    expense_kwargs = {
-        "amount": payload.amount,
-        "currency": payload.currency.upper(),
-        "category": payload.category,
-        "description": payload.description,
-        "place_id": place_uuid,
-        "trip_id": trip_uuid,
-        "paid_by_participant_id": paid_by_uuid,
-    }
-    if payload.date is not None:
-        expense_kwargs["date"] = payload.date
-
-    expense = Expense(**expense_kwargs)
+    expense_fields, split_targets = await _prepare_expense_payload(db, payload)
+    expense = Expense(**expense_fields)
     db.add(expense)
     await db.flush()
+    await _replace_expense_splits(
+        db,
+        expense.id,
+        Decimal(str(payload.amount)),
+        split_targets,
+    )
 
-    if split_targets:
-        split_map = _split_amount_evenly(
-            Decimal(str(payload.amount)),
-            split_targets,
-        )
-        for participant_id, share_amount in split_map.items():
-            db.add(
-                ExpenseSplit(
-                    expense_id=expense.id,
-                    participant_id=participant_id,
-                    share_amount=share_amount,
-                )
-            )
+    await db.commit()
 
+    result = await db.execute(_expense_stmt().where(Expense.id == expense.id))
+    serialized = await _serialize_expenses(db, result.all())
+    return ExpenseResponse(**serialized[0])
+
+
+@router.patch("/expenses/{expense_id}", response_model=ExpenseResponse)
+async def update_expense(
+    expense_id: str,
+    payload: ExpenseUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    expense_uuid = _parse_uuid(expense_id, "expense_id")
+    expense = await db.get(Expense, expense_uuid)
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    expense_fields, split_targets = await _prepare_expense_payload(db, payload)
+    for field, value in expense_fields.items():
+        setattr(expense, field, value)
+
+    await _replace_expense_splits(
+        db,
+        expense.id,
+        Decimal(str(payload.amount)),
+        split_targets,
+    )
     await db.commit()
 
     result = await db.execute(_expense_stmt().where(Expense.id == expense.id))

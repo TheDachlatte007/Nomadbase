@@ -1,4 +1,5 @@
 import json
+import re
 from urllib.parse import quote
 from uuid import UUID
 
@@ -13,6 +14,63 @@ from app.models.place import Place
 from app.schemas.place import PlaceListResponse
 
 router = APIRouter()
+
+_PLACE_TYPE_TERMS = {
+    "restaurant": "restaurant",
+    "restaurants": "restaurant",
+    "food": "restaurant",
+    "dinner": "restaurant",
+    "lunch": "restaurant",
+    "eat": "restaurant",
+    "cafe": "cafe",
+    "cafes": "cafe",
+    "coffee": "cafe",
+    "church": "cultural",
+    "churches": "cultural",
+    "museum": "cultural",
+    "museums": "cultural",
+    "gallery": "cultural",
+    "galleries": "cultural",
+    "park": "park",
+    "parks": "park",
+    "nature": "park",
+    "hike": "hiking",
+    "hikes": "hiking",
+    "hiking": "hiking",
+    "trail": "hiking",
+    "trails": "hiking",
+    "viewpoint": "viewpoint",
+    "viewpoints": "viewpoint",
+    "lookout": "viewpoint",
+    "sight": "attraction",
+    "sights": "attraction",
+    "attraction": "attraction",
+    "attractions": "attraction",
+}
+_TAG_TERM_MAP = {
+    "vegan": "vegan",
+    "vegetarian": "vegetarian",
+    "outdoor": "outdoor_seating",
+    "patio": "outdoor_seating",
+    "terrace": "outdoor_seating",
+    "wifi": "wifi",
+    "wi-fi": "wifi",
+    "wheelchair": "wheelchair",
+    "accessible": "wheelchair",
+}
+_STOP_WORDS = {
+    "in",
+    "near",
+    "around",
+    "best",
+    "the",
+    "a",
+    "an",
+    "for",
+    "to",
+    "me",
+    "my",
+}
 
 
 @router.get("/")
@@ -152,13 +210,72 @@ def _serialize_place(row) -> dict:
 
 
 # Allowed tag filters mapped to the JSONB key/value pair they assert
-_ALLOWED_TAG_FILTERS: dict[str, dict[str, str]] = {
-    "vegan": {"diet:vegan": "yes"},
-    "vegetarian": {"diet:vegetarian": "yes"},
-    "outdoor_seating": {"outdoor_seating": "yes"},
-    "wifi": {"internet_access": "wlan"},
-    "wheelchair": {"wheelchair": "yes"},
-}
+def _parse_search_context(
+    q: str | None,
+    place_type: str | None,
+    tag_filters: str | None,
+) -> tuple[str | None, list[str], list[str]]:
+    inferred_place_type = place_type
+    inferred_tag_filters = {
+        value.strip()
+        for value in (tag_filters or "").split(",")
+        if value.strip()
+    }
+    free_text_terms: list[str] = []
+
+    if not q:
+        return inferred_place_type, sorted(inferred_tag_filters), free_text_terms
+
+    raw_terms = [
+        token for token in re.split(r"[^a-z0-9:+-]+", q.lower()) if token
+    ]
+    for term in raw_terms:
+        mapped_place_type = _PLACE_TYPE_TERMS.get(term)
+        if mapped_place_type:
+            if not inferred_place_type:
+                inferred_place_type = mapped_place_type
+                continue
+            if inferred_place_type == mapped_place_type:
+                continue
+        if term in _TAG_TERM_MAP:
+            inferred_tag_filters.add(_TAG_TERM_MAP[term])
+            continue
+        if term in _STOP_WORDS:
+            continue
+        free_text_terms.append(term)
+
+    return inferred_place_type, sorted(inferred_tag_filters), free_text_terms
+
+
+def _tag_predicate(tag_key: str):
+    if tag_key == "vegan":
+        return or_(
+            Place.tags.contains(cast(json.dumps({"diet:vegan": "yes"}), JSONB)),
+            Place.tags.contains(cast(json.dumps({"diet:vegan": "only"}), JSONB)),
+        )
+    if tag_key == "vegetarian":
+        return or_(
+            Place.tags.contains(cast(json.dumps({"diet:vegetarian": "yes"}), JSONB)),
+            Place.tags.contains(
+                cast(json.dumps({"diet:vegetarian": "only"}), JSONB)
+            ),
+        )
+    if tag_key == "outdoor_seating":
+        return Place.tags.contains(cast(json.dumps({"outdoor_seating": "yes"}), JSONB))
+    if tag_key == "wifi":
+        return or_(
+            Place.tags.contains(cast(json.dumps({"internet_access": "wlan"}), JSONB)),
+            Place.tags.contains(cast(json.dumps({"internet_access": "yes"}), JSONB)),
+        )
+    if tag_key == "wheelchair":
+        return or_(
+            Place.tags.contains(cast(json.dumps({"wheelchair": "yes"}), JSONB)),
+            Place.tags.contains(cast(json.dumps({"wheelchair": "limited"}), JSONB)),
+            Place.tags.contains(
+                cast(json.dumps({"wheelchair": "designated"}), JSONB)
+            ),
+        )
+    return None
 
 
 @router.get("/places", response_model=PlaceListResponse)
@@ -172,9 +289,13 @@ async def list_places(
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
+    effective_place_type, effective_tag_filters, free_text_terms = _parse_search_context(
+        q, place_type, tag_filters
+    )
+
     filters = []
-    if place_type:
-        filters.append(Place.place_type == place_type)
+    if effective_place_type:
+        filters.append(Place.place_type == effective_place_type)
     if region:
         filters.append(Place.region.ilike(f"%{region.strip()}%"))
     if trip_id:
@@ -194,7 +315,19 @@ async def list_places(
                 )
         if city_filters:
             filters.append(or_(*city_filters))
-    if q:
+    if free_text_terms:
+        for term in free_text_terms:
+            pattern = f"%{term}%"
+            filters.append(
+                or_(
+                    Place.name.ilike(pattern),
+                    Place.description.ilike(pattern),
+                    Place.region.ilike(pattern),
+                    cast(Place.tags, Text).ilike(pattern),
+                    cast(Place.raw_osm_tags, Text).ilike(pattern),
+                )
+            )
+    elif q and not (effective_place_type or effective_tag_filters):
         pattern = f"%{q.strip()}%"
         filters.append(
             or_(
@@ -205,30 +338,71 @@ async def list_places(
                 cast(Place.raw_osm_tags, Text).ilike(pattern),
             )
         )
-    if tag_filters:
-        for key in tag_filters.split(","):
-            key = key.strip()
-            if key in _ALLOWED_TAG_FILTERS:
-                required = _ALLOWED_TAG_FILTERS[key]
-                filters.append(Place.tags.contains(cast(json.dumps(required), JSONB)))
+    for key in effective_tag_filters:
+        predicate = _tag_predicate(key)
+        if predicate is not None:
+            filters.append(predicate)
 
     count_stmt = select(func.count()).select_from(Place)
     if filters:
         count_stmt = count_stmt.where(and_(*filters))
     total_available = (await db.execute(count_stmt)).scalar_one()
 
-    if q:
+    order_clause = []
+    if free_text_terms:
+        first_term = free_text_terms[0]
+        order_clause.append(
+            case(
+                (Place.region.ilike(f"%{first_term}%"), 0),
+                (Place.name.ilike(f"{first_term}%"), 1),
+                else_=2,
+            )
+        )
+    elif q:
         normalized_q = q.strip().lower()
-        order_clause = [
+        order_clause.append(
             case(
                 (func.lower(Place.name) == normalized_q, 0),
                 (Place.name.ilike(f"{q.strip()}%"), 1),
                 else_=2,
-            ),
-            Place.name.asc(),
-        ]
-    else:
-        order_clause = [Place.name.asc()]
+            )
+        )
+
+    if "vegan" in effective_tag_filters:
+        order_clause.append(
+            case(
+                (
+                    Place.tags.contains(cast(json.dumps({"diet:vegan": "only"}), JSONB)),
+                    0,
+                ),
+                (
+                    Place.tags.contains(cast(json.dumps({"diet:vegan": "yes"}), JSONB)),
+                    1,
+                ),
+                else_=2,
+            )
+        )
+
+    if "vegetarian" in effective_tag_filters:
+        order_clause.append(
+            case(
+                (
+                    Place.tags.contains(
+                        cast(json.dumps({"diet:vegetarian": "only"}), JSONB)
+                    ),
+                    0,
+                ),
+                (
+                    Place.tags.contains(
+                        cast(json.dumps({"diet:vegetarian": "yes"}), JSONB)
+                    ),
+                    1,
+                ),
+                else_=2,
+            )
+        )
+
+    order_clause.extend([Place.name.asc(), Place.region.asc()])
 
     stmt = _base_place_select().order_by(*order_clause).limit(limit).offset(offset)
     if filters:

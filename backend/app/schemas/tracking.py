@@ -17,6 +17,18 @@ class ExpenseCreateRequest(BaseModel):
     date: date_type | None = None
 
 
+class ExpenseUpdateRequest(BaseModel):
+    amount: float | None = Field(default=None, gt=0)
+    currency: str | None = Field(default=None, max_length=3, min_length=3)
+    category: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=4000)
+    place_id: str | None = None
+    trip_id: str | None = None
+    paid_by_participant_id: str | None = None
+    split_participant_ids: list[str] | None = None
+    date: date_type | None = None
+
+
 class ExpenseResponse(BaseModel):
     id: str
     amount: float

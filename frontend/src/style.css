@@ -106,6 +106,14 @@ code {
   gap: 16px;
 }
 
+.stack-between > * {
+  min-width: 0;
+}
+
+.stack-between--tight {
+  align-items: center;
+}
+
 .hero-card {
   display: grid;
   gap: 24px;
@@ -478,6 +486,13 @@ code {
   flex-wrap: wrap;
 }
 
+.entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .city-list-item {
   display: flex;
   justify-content: space-between;
@@ -614,6 +629,13 @@ code {
   margin: 0;
 }
 
+.participant-option span,
+.summary-item strong,
+.summary-item span,
+.city-list-item span {
+  overflow-wrap: anywhere;
+}
+
 .tracking-balance-grid {
   display: grid;
   gap: 10px;
@@ -702,5 +724,24 @@ code {
   .context-strip,
   .trip-sections {
     grid-template-columns: 1fr;
+  }
+
+  .trip-actions,
+  .entry-actions {
+    width: 100%;
+  }
+
+  .trip-actions > *,
+  .entry-actions > * {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .city-list-item {
+    align-items: flex-start;
+  }
+
+  #map-view {
+    height: 340px;
   }
 }

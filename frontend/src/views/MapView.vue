@@ -213,11 +213,11 @@ function getDisplayTags(place) {
   const tags = place.tags || {}
   const chips = []
   if (place.cuisine) chips.push(place.cuisine.replace(/_/g, ' '))
-  if (tags['diet:vegan'] === 'yes') chips.push('vegan')
-  if (tags['diet:vegetarian'] === 'yes') chips.push('vegetarian')
+  if (['yes', 'only'].includes(tags['diet:vegan'])) chips.push('vegan')
+  if (['yes', 'only'].includes(tags['diet:vegetarian'])) chips.push('vegetarian')
   if (tags.outdoor_seating === 'yes') chips.push('outdoor')
-  if (tags.internet_access === 'wlan') chips.push('wifi')
-  if (tags.wheelchair === 'yes') chips.push('wheelchair')
+  if (['wlan', 'yes'].includes(tags.internet_access)) chips.push('wifi')
+  if (['yes', 'limited', 'designated'].includes(tags.wheelchair)) chips.push('wheelchair')
   return chips.slice(0, 4)
 }
 
