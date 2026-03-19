@@ -23,7 +23,7 @@ async def check():
 count = asyncio.run(check())
 print(f'Places in DB: {count}')
 if count == 0:
-    print('No places found — running first-boot seed...')
+    print('No places found - running first-boot seed...')
     import importlib, asyncio as a2
     seed = importlib.import_module('app.seed_alpha')
     inserted = a2.run(seed.seed_alpha_places())
