@@ -1,6 +1,6 @@
 """trip participants and expense splits
 
-Revision ID: 0002_trip_participants_and_expense_splits
+Revision ID: 0002_trip_shared_finance
 Revises: 0001_initial_schema
 Create Date: 2026-03-19 22:40:00
 """
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
-revision: str = "0002_trip_participants_and_expense_splits"
+revision: str = "0002_trip_shared_finance"
 down_revision: Union[str, None] = "0001_initial_schema"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
