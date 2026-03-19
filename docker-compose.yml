@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: nomadbase
       POSTGRES_USER: nomadbase
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_HOST_AUTH_METHOD: trust
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nomadbase"]
       interval: 5s
@@ -24,7 +24,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://nomadbase:${DB_PASSWORD}@db:5432/nomadbase
+      DATABASE_URL: postgresql+asyncpg://nomadbase@db:5432/nomadbase
       DEBUG: "false"
     healthcheck:
       test:

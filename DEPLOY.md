@@ -12,13 +12,9 @@ This repository is prepared for a first private deployment through GitHub and Po
 
 ## Required environment
 
-- `DB_PASSWORD`
+None for the current alpha stack.
 
-Example:
-
-```env
-DB_PASSWORD=change_me
-```
+The bundled Postgres service is configured for passwordless local alpha deployment so the stack can boot without extra setup.
 
 ## Expected first-run behavior
 
@@ -29,6 +25,8 @@ The API container runs:
 3. `uvicorn app.main:app --host 0.0.0.0 --port 8000`
 
 That means the database schema should be created automatically on first deploy once the database is reachable.
+
+If you previously deployed with a password-protected Postgres volume, remove the existing `pgdata` volume before redeploying this passwordless alpha setup.
 
 ## First checks after deploy
 
