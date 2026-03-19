@@ -12,7 +12,9 @@ class Place(TimestampMixin, Base):
     osm_id = Column(BigInteger, unique=True, index=True, nullable=True)
     name = Column(String(500), nullable=False, index=True)
     place_type = Column(String(100), nullable=False, index=True)
-    location = Column(Geometry("POINT", srid=4326), nullable=False)
+    location = Column(
+        Geometry("POINT", srid=4326, spatial_index=False), nullable=False
+    )
     tags = Column(JSONB, default=dict)
     description = Column(Text, nullable=True)
     source = Column(String(50), default="osm")

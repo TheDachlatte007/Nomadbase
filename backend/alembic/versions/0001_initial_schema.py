@@ -29,7 +29,11 @@ def upgrade() -> None:
         sa.Column("osm_id", sa.BigInteger(), nullable=True),
         sa.Column("name", sa.String(length=500), nullable=False),
         sa.Column("place_type", sa.String(length=100), nullable=False),
-        sa.Column("location", Geometry("POINT", srid=4326), nullable=False),
+        sa.Column(
+            "location",
+            Geometry("POINT", srid=4326, spatial_index=False),
+            nullable=False,
+        ),
         sa.Column("tags", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("source", sa.String(length=50), nullable=True),
@@ -99,7 +103,11 @@ def upgrade() -> None:
         sa.Column("trip_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("name", sa.String(length=200), nullable=False),
         sa.Column("country", sa.String(length=100), nullable=True),
-        sa.Column("location", Geometry("POINT", srid=4326), nullable=True),
+        sa.Column(
+            "location",
+            Geometry("POINT", srid=4326, spatial_index=False),
+            nullable=True,
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

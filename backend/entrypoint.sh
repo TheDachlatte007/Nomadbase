@@ -32,6 +32,45 @@ async def main():
 asyncio.run(main())
 PY
 
+echo "Checking for partial bootstrap state..."
+python - <<'PY'
+import asyncio
+import os
+
+import asyncpg
+
+
+DATABASE_URL = os.environ["DATABASE_URL"].replace("+asyncpg", "")
+
+
+async def exists(conn, query, *args):
+    return bool(await conn.fetchval(query, *args))
+
+
+async def main():
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        has_alembic = await exists(
+            conn,
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'alembic_version')",
+        )
+        has_places = await exists(
+            conn,
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'places')",
+        )
+
+        if not has_alembic and has_places:
+            print("Detected partially initialized schema without alembic_version; resetting public schema...")
+            await conn.execute("DROP SCHEMA public CASCADE")
+            await conn.execute("CREATE SCHEMA public")
+            await conn.execute("CREATE EXTENSION IF NOT EXISTS postgis")
+    finally:
+        await conn.close()
+
+
+asyncio.run(main())
+PY
+
 echo "Running migrations..."
 alembic upgrade head
 
