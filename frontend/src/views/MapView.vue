@@ -124,6 +124,12 @@
           <details class="place-actions" @click.stop>
             <summary>Save or note</summary>
             <form class="save-form" @submit.prevent="onSavePlace(place)">
+              <select v-model="saveForms[place.id].trip_id">
+                <option value="">Global shortlist</option>
+                <option v-for="trip in trips" :key="trip.id" :value="trip.id">
+                  {{ trip.name }}
+                </option>
+              </select>
               <select v-model="saveForms[place.id].status">
                 <option value="want_to_visit">Want to visit</option>
                 <option value="visited">Visited</option>
@@ -229,7 +235,12 @@ watch(
   (newPlaces) => {
     for (const place of newPlaces) {
       if (!saveForms[place.id]) {
-        saveForms[place.id] = { status: 'want_to_visit', notes: '', feedback: '' }
+        saveForms[place.id] = {
+          trip_id: selectedTripId.value || tripsStore.activeTripId || '',
+          status: 'want_to_visit',
+          notes: '',
+          feedback: '',
+        }
       }
     }
   },
@@ -240,6 +251,11 @@ watch(
   () => tripsStore.activeTripId,
   (tripId) => {
     selectedTripId.value = tripId || ''
+    for (const form of Object.values(saveForms)) {
+      if (!form.trip_id) {
+        form.trip_id = tripId || ''
+      }
+    }
   }
 )
 
@@ -254,6 +270,14 @@ watch(
   },
   { immediate: true }
 )
+
+watch(selectedTripId, (tripId) => {
+  for (const form of Object.values(saveForms)) {
+    if (!form.trip_id) {
+      form.trip_id = tripId || ''
+    }
+  }
+})
 
 function getDisplayTags(place) {
   const tags = place.tags || {}
@@ -479,8 +503,8 @@ async function onSavePlace(place) {
   const form = saveForms[place.id]
   form.feedback = 'Saving...'
   try {
-    await savedStore.savePlace(place.id, form.status, form.notes || null)
-    form.feedback = 'Saved'
+    await savedStore.savePlace(place.id, form.status, form.notes || null, form.trip_id || null)
+    form.feedback = form.trip_id ? 'Saved to trip shortlist' : 'Saved to global shortlist'
     form.notes = ''
   } catch {
     form.feedback = 'Save failed'

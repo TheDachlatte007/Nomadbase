@@ -37,6 +37,7 @@ NomadBase should become a trip-scoped travel database first:
 - Add `trip_id` to saved places.
 - Allow one place to be saved globally or for a specific trip.
 - Show trip-specific shortlists such as `food`, `churches`, `nature`, `backup options`.
+- Keep the map save flow lightweight: default to the active trip, but allow switching back to a global shortlist.
 
 ### Phase 3: Route overview
 - Let a trip define an ordered city route.

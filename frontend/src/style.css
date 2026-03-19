@@ -416,6 +416,12 @@ code {
   gap: 10px;
 }
 
+.saved-sections,
+.saved-section {
+  display: grid;
+  gap: 16px;
+}
+
 .summary-item,
 .import-item {
   display: grid;
