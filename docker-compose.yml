@@ -4,7 +4,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata_alpha:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: nomadbase
       POSTGRES_USER: nomadbase
@@ -48,4 +48,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  pgdata:
+  pgdata_alpha:
