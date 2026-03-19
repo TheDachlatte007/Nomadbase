@@ -28,7 +28,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useAdminStore } from './stores/admin.js'
 import { usePlacesStore } from './stores/places.js'
 import { useSavedStore } from './stores/saved.js'
@@ -49,6 +49,10 @@ const tabs = [
   { path: '/more', label: 'More' },
 ]
 
+const BOOTSTRAP_RETRY_MS = 3000
+const BOOTSTRAP_MAX_ATTEMPTS = 10
+let bootstrapRetryHandle = null
+
 const healthText = computed(() => {
   if (adminStore.health === 'ok') return 'API reachable'
   if (adminStore.health === 'degraded') return 'API degraded'
@@ -63,12 +67,28 @@ const pillStyle = computed(() => {
   return {}
 })
 
-onMounted(async () => {
+function clearBootstrapRetry() {
+  if (bootstrapRetryHandle !== null) {
+    window.clearTimeout(bootstrapRetryHandle)
+    bootstrapRetryHandle = null
+  }
+}
+
+function shouldRetryBootstrap(attempt) {
+  if (attempt >= BOOTSTRAP_MAX_ATTEMPTS) return false
+  if (adminStore.health !== 'ok') return true
+  return placesStore.isOffline && !placesStore.cacheSource
+}
+
+async function bootstrapApp(attempt = 1) {
+  clearBootstrapRetry()
   await adminStore.checkHealth()
+
   // Always fetch places — the store falls back to IndexedDB when offline
   await placesStore.fetchPlaces()
+
   if (adminStore.health !== 'offline') {
-    await Promise.all([
+    await Promise.allSettled([
       savedStore.fetchSaved(),
       tripsStore.fetchTrips(),
       trackingStore.fetchAll(),
@@ -77,5 +97,19 @@ onMounted(async () => {
       adminStore.fetchPreferences(),
     ])
   }
+
+  if (shouldRetryBootstrap(attempt)) {
+    bootstrapRetryHandle = window.setTimeout(() => {
+      bootstrapApp(attempt + 1).catch(() => {})
+    }, BOOTSTRAP_RETRY_MS)
+  }
+}
+
+onMounted(() => {
+  bootstrapApp().catch(() => {})
+})
+
+onUnmounted(() => {
+  clearBootstrapRetry()
 })
 </script>

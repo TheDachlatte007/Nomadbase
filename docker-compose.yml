@@ -26,6 +26,16 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://nomadbase:${DB_PASSWORD}@db:5432/nomadbase
       DEBUG: "false"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import json,sys,urllib.request; resp = urllib.request.urlopen('http://127.0.0.1:8000/api/health'); data = json.load(resp); sys.exit(0 if resp.status == 200 and data.get('database') else 1)\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
     restart: unless-stopped
 
   frontend:
@@ -33,7 +43,8 @@ services:
     ports:
       - "5000:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
