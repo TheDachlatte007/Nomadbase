@@ -26,9 +26,9 @@ The API container runs:
 
 That means the database schema should be created automatically on first deploy once the database is reachable.
 
-If you previously deployed with a password-protected Postgres volume, this compose file now uses a fresh alpha volume automatically.
+If you previously deployed with an older password-protected Postgres volume, this compose file now uses a fresh volume automatically.
 
-Old stacks may still leave behind a `nomadbase_pgdata` volume in Docker, but the current setup now boots against the new `nomadbase_pgdata_alpha` volume instead.
+Old stacks may still leave behind a `nomadbase_pgdata` volume in Docker, but the current setup now boots against the new `nomadbase_postgres_data` volume instead.
 
 ## First checks after deploy
 
