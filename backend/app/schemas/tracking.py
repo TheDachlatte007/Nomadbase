@@ -12,6 +12,8 @@ class ExpenseCreateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
     place_id: str | None = None
     trip_id: str | None = None
+    paid_by_participant_id: str | None = None
+    split_participant_ids: list[str] = Field(default_factory=list)
     date: date_type | None = None
 
 
@@ -26,6 +28,10 @@ class ExpenseResponse(BaseModel):
     city: str | None = None
     trip_id: str | None = None
     trip_name: str | None = None
+    paid_by_participant_id: str | None = None
+    paid_by_participant_name: str | None = None
+    split_participant_ids: list[str] = Field(default_factory=list)
+    split_participant_names: list[str] = Field(default_factory=list)
     date: date_type
     created_at: datetime
     updated_at: datetime | None = None
@@ -46,6 +52,36 @@ class ExpenseSummaryResponse(BaseModel):
     data: list[ExpenseSummaryItem]
     total_amount: float
     currency: str
+    message: str
+
+
+class TripBalanceParticipant(BaseModel):
+    participant_id: str
+    participant_name: str
+    paid: float
+    owed: float
+    net: float
+
+
+class TripSettlementTransfer(BaseModel):
+    from_participant_id: str
+    from_participant_name: str
+    to_participant_id: str
+    to_participant_name: str
+    amount: float
+
+
+class TripSettlementCurrencyGroup(BaseModel):
+    currency: str
+    total_expenses: float
+    participants: list[TripBalanceParticipant]
+    transfers: list[TripSettlementTransfer]
+
+
+class TripSettlementResponse(BaseModel):
+    trip_id: str
+    trip_name: str
+    data: list[TripSettlementCurrencyGroup]
     message: str
 
 

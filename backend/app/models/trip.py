@@ -15,3 +15,6 @@ class Trip(TimestampMixin, Base):
     notes = Column(Text, nullable=True)
 
     cities = relationship("City", back_populates="trip", cascade="all, delete-orphan")
+    participants = relationship(
+        "TripParticipant", back_populates="trip", cascade="all, delete-orphan"
+    )

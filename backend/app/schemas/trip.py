@@ -20,6 +20,11 @@ class TripCityCreateRequest(BaseModel):
     lon: float | None = None
 
 
+class TripParticipantCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    note: str | None = Field(default=None, max_length=1000)
+
+
 class TripCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     start_date: date_type | None = None
@@ -37,6 +42,14 @@ class TripCityResponse(BaseModel):
     updated_at: datetime | None = None
 
 
+class TripParticipantResponse(BaseModel):
+    id: str
+    name: str
+    note: str | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
 class TripResponse(BaseModel):
     id: str
     name: str
@@ -46,6 +59,7 @@ class TripResponse(BaseModel):
     created_at: datetime
     updated_at: datetime | None = None
     cities: list[TripCityResponse]
+    participants: list[TripParticipantResponse]
 
 
 class TripListResponse(BaseModel):

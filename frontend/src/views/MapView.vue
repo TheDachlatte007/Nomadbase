@@ -11,7 +11,11 @@
     <article class="info-card wide-card map-card">
       <div class="map-toolbar">
         <form class="toolbar" @submit.prevent="onSearch">
-          <input v-model="searchQuery" type="search" placeholder="Search places or city…">
+          <input v-model="searchQuery" type="search" placeholder="Search places, food, or city…">
+          <select v-model="selectedTripId">
+            <option value="">All imported regions</option>
+            <option v-for="trip in trips" :key="trip.id" :value="trip.id">{{ trip.name }}</option>
+          </select>
           <select v-model="placeType">
             <option value="">All types</option>
             <option value="park">Park</option>
@@ -39,6 +43,10 @@
             @click="toggleTagFilter(chip.key)"
           >{{ chip.label }}</span>
         </div>
+        <p class="muted map-helper">
+          {{ activeTrip ? `Scoped to ${activeTrip.name}.` : 'No trip scope selected.' }}
+          Search for things like <code>vegan restaurant</code> and refine with tags.
+        </p>
       </div>
 
       <div ref="mapEl" id="map-view"></div>
@@ -58,6 +66,7 @@
             <p v-if="importFeedback" class="feedback">{{ importFeedback }}</p>
           </template>
         </div>
+
         <article
           v-for="place in places"
           :key="place.id"
@@ -68,13 +77,22 @@
           <div @click="focusOnMap(place)" style="cursor:pointer">
             <p class="card-eyebrow">{{ place.region || 'unknown region' }}</p>
             <h4>{{ place.name }}</h4>
-            <p class="muted">{{ place.place_type }} · {{ place.lat.toFixed(3) }}, {{ place.lon.toFixed(3) }}</p>
+            <p class="muted">
+              {{ place.context_line || `${place.place_type} · ${place.lat.toFixed(3)}, ${place.lon.toFixed(3)}` }}
+            </p>
           </div>
           <p>{{ place.description || 'No description yet.' }}</p>
+
           <div class="chip-row">
             <span class="chip">{{ place.place_type }}</span>
             <span v-for="tag in getDisplayTags(place)" :key="tag" class="chip chip--tag">{{ tag }}</span>
           </div>
+
+          <div v-if="place.website_url || place.wikipedia_url" class="link-row" @click.stop>
+            <a v-if="place.website_url" :href="place.website_url" target="_blank" rel="noreferrer">Website</a>
+            <a v-if="place.wikipedia_url" :href="place.wikipedia_url" target="_blank" rel="noreferrer">Wikipedia</a>
+          </div>
+
           <form class="save-form" @submit.prevent="onSavePlace(place)">
             <select v-model="saveForms[place.id].status">
               <option value="want_to_visit">Want to visit</option>
@@ -108,28 +126,34 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, reactive } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet.markercluster'
+import { useRoute } from 'vue-router'
+import { useAdminStore } from '../stores/admin.js'
 import { usePlacesStore } from '../stores/places.js'
 import { useSavedStore } from '../stores/saved.js'
-import { useAdminStore } from '../stores/admin.js'
+import { useTripsStore } from '../stores/trips.js'
 
+const route = useRoute()
 const placesStore = usePlacesStore()
 const savedStore = useSavedStore()
 const adminStore = useAdminStore()
+const tripsStore = useTripsStore()
 
 const places = computed(() => placesStore.places)
 const loading = computed(() => placesStore.loading)
 const hasMore = computed(() => placesStore.hasMore)
 const totalAvailable = computed(() => placesStore.totalAvailable)
+const trips = computed(() => tripsStore.trips)
+const activeTrip = computed(() => tripsStore.activeTrip)
+
 const searchQuery = ref('')
 const placeType = ref('')
+const selectedTripId = ref(tripsStore.activeTripId || '')
 const nearMeText = ref('Near me')
 const nearMeLoading = ref(false)
 const mapEl = ref(null)
-
-// Inline import state
 const importing = ref(false)
 const importFeedback = ref('')
 
@@ -148,41 +172,55 @@ const healthTitle = computed(() => {
   return 'Waiting for health check.'
 })
 const healthCopy = computed(() => {
-  if (adminStore.health === 'ok')
-    return 'FastAPI answered through the proxy and the database is healthy.'
-  if (adminStore.health === 'degraded')
-    return 'The endpoint answered but the database check returned a warning.'
+  if (adminStore.health === 'ok') return 'FastAPI answered through the proxy and the database is healthy.'
+  if (adminStore.health === 'degraded') return 'The endpoint answered but the database check returned a warning.'
   return 'API container may not be up yet or the reverse proxy cannot reach it.'
 })
 
-// Per-place save forms
 const saveForms = reactive({})
 watch(
   places,
   (newPlaces) => {
-    for (const p of newPlaces) {
-      if (!saveForms[p.id]) {
-        saveForms[p.id] = { status: 'want_to_visit', notes: '', feedback: '' }
+    for (const place of newPlaces) {
+      if (!saveForms[place.id]) {
+        saveForms[place.id] = { status: 'want_to_visit', notes: '', feedback: '' }
       }
     }
   },
   { immediate: true }
 )
 
-// Extract up to 3 useful display tags from a place
+watch(
+  () => tripsStore.activeTripId,
+  (tripId) => {
+    selectedTripId.value = tripId || ''
+  }
+)
+
+watch(
+  () => route.query.trip,
+  (tripId) => {
+    if (typeof tripId === 'string') {
+      selectedTripId.value = tripId
+      tripsStore.setActiveTrip(tripId)
+      runSearch().catch(() => {})
+    }
+  },
+  { immediate: true }
+)
+
 function getDisplayTags(place) {
-  const t = place.tags || {}
+  const tags = place.tags || {}
   const chips = []
-  if (t.cuisine) chips.push(t.cuisine.replace(/_/g, ' '))
-  if (t['diet:vegan'] === 'yes') chips.push('vegan')
-  if (t['diet:vegetarian'] === 'yes') chips.push('vegetarian')
-  if (t.outdoor_seating === 'yes') chips.push('outdoor')
-  if (t['internet_access'] === 'wlan') chips.push('wifi')
-  if (t.wheelchair === 'yes') chips.push('wheelchair')
-  return chips.slice(0, 3)
+  if (place.cuisine) chips.push(place.cuisine.replace(/_/g, ' '))
+  if (tags['diet:vegan'] === 'yes') chips.push('vegan')
+  if (tags['diet:vegetarian'] === 'yes') chips.push('vegetarian')
+  if (tags.outdoor_seating === 'yes') chips.push('outdoor')
+  if (tags.internet_access === 'wlan') chips.push('wifi')
+  if (tags.wheelchair === 'yes') chips.push('wheelchair')
+  return chips.slice(0, 4)
 }
 
-// --- Leaflet ---
 const TYPE_COLORS = {
   park: '#2d7a2d',
   restaurant: '#c86f31',
@@ -211,9 +249,7 @@ function focusOnMap(place) {
   if (!map || !clusterGroup) return
   const marker = placeMarkers.get(place.id)
   if (marker) {
-    clusterGroup.zoomToShowLayer(marker, () => {
-      marker.openPopup()
-    })
+    clusterGroup.zoomToShowLayer(marker, () => marker.openPopup())
   } else {
     map.setView([place.lat, place.lon], 15, { animate: true })
   }
@@ -222,9 +258,7 @@ function focusOnMap(place) {
 function syncMarkers(newPlaces) {
   if (!map || !clusterGroup) return
 
-  const currentIds = new Set(newPlaces.map((p) => p.id))
-
-  // Remove stale markers
+  const currentIds = new Set(newPlaces.map((place) => place.id))
   for (const [id, marker] of placeMarkers) {
     if (!currentIds.has(id)) {
       clusterGroup.removeLayer(marker)
@@ -232,7 +266,6 @@ function syncMarkers(newPlaces) {
     }
   }
 
-  // Add new markers to cluster group
   const toAdd = []
   for (const place of newPlaces) {
     if (placeMarkers.has(place.id)) continue
@@ -242,9 +275,9 @@ function syncMarkers(newPlaces) {
     })
     marker.bindPopup(
       `<strong>${place.name}</strong><br>
-       <span style="color:#5f6d69;font-size:.9em">${place.place_type}${place.region ? ` · ${place.region}` : ''}</span>
+       <span style="color:#5f6d69;font-size:.9em">${place.context_line || place.place_type}</span>
        ${place.description ? `<br><span style="font-size:.88em">${place.description}</span>` : ''}`,
-      { maxWidth: 220 }
+      { maxWidth: 240 }
     )
     marker.on('click', () => {
       const card = document.querySelector(`[data-place-id="${place.id}"]`)
@@ -257,10 +290,9 @@ function syncMarkers(newPlaces) {
     placeMarkers.set(place.id, marker)
     toAdd.push(marker)
   }
-  if (toAdd.length) clusterGroup.addLayers(toAdd)
 
-  // Fit bounds
-  if (newPlaces.length > 0 && placeMarkers.size > 0) {
+  if (toAdd.length) clusterGroup.addLayers(toAdd)
+  if (newPlaces.length && placeMarkers.size) {
     const group = L.featureGroup([...placeMarkers.values()])
     map.fitBounds(group.getBounds().pad(0.2))
   }
@@ -283,7 +315,7 @@ onMounted(() => {
   })
   map.addLayer(clusterGroup)
 
-  if (places.value.length > 0) syncMarkers(places.value)
+  if (places.value.length) syncMarkers(places.value)
 })
 
 onUnmounted(() => {
@@ -293,19 +325,24 @@ onUnmounted(() => {
   placeMarkers.clear()
 })
 
+function runSearch() {
+  const tagStr = [...activeTagFilters].join(',')
+  return placesStore.fetchPlaces(searchQuery.value, placeType.value, tagStr, selectedTripId.value)
+}
+
 function toggleTagFilter(key) {
   if (activeTagFilters.has(key)) {
     activeTagFilters.delete(key)
   } else {
     activeTagFilters.add(key)
   }
-  onSearch()
+  runSearch().catch(() => {})
 }
 
 async function onSearch() {
   importFeedback.value = ''
-  const tagStr = [...activeTagFilters].join(',')
-  await placesStore.fetchPlaces(searchQuery.value, placeType.value, tagStr)
+  tripsStore.setActiveTrip(selectedTripId.value)
+  await runSearch()
 }
 
 async function onLoadMore() {
@@ -317,27 +354,23 @@ async function onNearMe() {
     nearMeText.value = 'Not supported'
     return
   }
+
   nearMeText.value = 'Locating...'
   nearMeLoading.value = true
-
   navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      const { latitude, longitude } = pos.coords
+    async ({ coords }) => {
       try {
-        map?.setView([latitude, longitude], 14)
+        map?.setView([coords.latitude, coords.longitude], 14)
         if (userMarker) userMarker.remove()
-        userMarker = L.circleMarker([latitude, longitude], {
+        userMarker = L.circleMarker([coords.latitude, coords.longitude], {
           radius: 8,
           fillColor: '#0f5c52',
           color: '#fff',
           weight: 2,
           fillOpacity: 0.9,
-        })
-          .addTo(map)
-          .bindPopup('You are here')
-          .openPopup()
+        }).addTo(map).bindPopup('You are here').openPopup()
 
-        const nearby = await placesStore.fetchNearby(latitude, longitude)
+        const nearby = await placesStore.fetchNearby(coords.latitude, coords.longitude)
         nearMeText.value = `${nearby.length} nearby`
       } catch {
         nearMeText.value = 'Failed'
@@ -360,13 +393,13 @@ async function onInlineImport() {
   try {
     const result = await adminStore.importCity(searchQuery.value, null)
     if (result.imported === 0) {
-      importFeedback.value = `No named places found for "${searchQuery.value}". Try a different spelling or add the country (e.g. go to More → Import).`
+      importFeedback.value = `No named places found for "${searchQuery.value}". Try a different spelling or add the country.`
     } else {
       importFeedback.value = `Imported ${result.imported} places for ${result.region}. Loading…`
-      await onSearch()
+      await runSearch()
     }
-  } catch (e) {
-    importFeedback.value = `Import failed: ${e.message}`
+  } catch (error) {
+    importFeedback.value = `Import failed: ${error.message}`
   } finally {
     importing.value = false
   }

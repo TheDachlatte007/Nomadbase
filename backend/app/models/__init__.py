@@ -4,8 +4,10 @@ from app.models.saved_place import SavedPlace
 from app.models.trip import Trip
 from app.models.city import City
 from app.models.expense import Expense
+from app.models.expense_split import ExpenseSplit
 from app.models.visit import Visit
 from app.models.preference import UserPreference
+from app.models.trip_participant import TripParticipant
 
 __all__ = [
     "Base",
@@ -14,6 +16,8 @@ __all__ = [
     "Trip",
     "City",
     "Expense",
+    "ExpenseSplit",
     "Visit",
     "UserPreference",
+    "TripParticipant",
 ]

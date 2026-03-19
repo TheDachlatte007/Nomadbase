@@ -28,6 +28,7 @@ TAG_TYPE_MAP: dict[tuple[str, str], str] = {
     ("amenity", "pub"): "cafe",
     ("amenity", "ice_cream"): "cafe",
     ("amenity", "bakery"): "cafe",
+    ("amenity", "place_of_worship"): "cultural",
     ("tourism", "attraction"): "attraction",
     ("tourism", "museum"): "cultural",
     ("tourism", "gallery"): "cultural",

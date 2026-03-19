@@ -22,6 +22,18 @@
         >{{ tab.label }}</RouterLink>
       </nav>
 
+      <section v-if="activeTrip" class="context-strip">
+        <div>
+          <p class="card-eyebrow">Active trip context</p>
+          <strong>{{ activeTrip.name }}</strong>
+          <span class="muted"> · {{ activeTrip.participants?.length || 0 }} people · {{ activeTrip.cities?.length || 0 }} cities</span>
+        </div>
+        <div class="trip-actions">
+          <RouterLink class="secondary-button action-button" to="/tracking">Open balances</RouterLink>
+          <RouterLink class="secondary-button action-button" to="/trips">Manage trip</RouterLink>
+        </div>
+      </section>
+
       <RouterView />
     </main>
   </div>
@@ -48,6 +60,7 @@ const tabs = [
   { path: '/tracking', label: 'Tracking' },
   { path: '/more', label: 'More' },
 ]
+const activeTrip = computed(() => tripsStore.activeTrip)
 
 const BOOTSTRAP_RETRY_MS = 3000
 const BOOTSTRAP_MAX_ATTEMPTS = 10
@@ -88,10 +101,10 @@ async function bootstrapApp(attempt = 1) {
   await placesStore.fetchPlaces()
 
   if (adminStore.health !== 'offline') {
+    await tripsStore.fetchTrips()
     await Promise.allSettled([
       savedStore.fetchSaved(),
-      tripsStore.fetchTrips(),
-      trackingStore.fetchAll(),
+      trackingStore.fetchAll(tripsStore.activeTripId),
       adminStore.fetchStatus(),
       adminStore.fetchImports(),
       adminStore.fetchPreferences(),

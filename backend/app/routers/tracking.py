@@ -1,26 +1,35 @@
+from collections import defaultdict
 from datetime import timezone
+from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models.expense import Expense
+from app.models.expense_split import ExpenseSplit
 from app.models.place import Place
 from app.models.trip import Trip
+from app.models.trip_participant import TripParticipant
 from app.models.visit import Visit
 from app.schemas.tracking import (
     ExpenseCreateRequest,
     ExpenseListResponse,
     ExpenseResponse,
     ExpenseSummaryResponse,
+    TripBalanceParticipant,
+    TripSettlementCurrencyGroup,
+    TripSettlementResponse,
+    TripSettlementTransfer,
     VisitCreateRequest,
     VisitListResponse,
     VisitResponse,
 )
 
 router = APIRouter()
+_CENT = Decimal("0.01")
 
 
 def _parse_uuid(value: str, field_name: str) -> UUID:
@@ -33,6 +42,27 @@ def _parse_uuid(value: str, field_name: str) -> UUID:
         ) from exc
 
 
+async def _require_place(db: AsyncSession, place_id: UUID) -> None:
+    if await db.get(Place, place_id) is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+
+
+async def _require_trip(db: AsyncSession, trip_id: UUID) -> Trip:
+    trip = await db.get(Trip, trip_id)
+    if trip is None:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    return trip
+
+
+async def _load_trip_participants(
+    db: AsyncSession, trip_id: UUID
+) -> dict[UUID, TripParticipant]:
+    result = await db.execute(
+        select(TripParticipant).where(TripParticipant.trip_id == trip_id)
+    )
+    return {participant.id: participant for participant in result.scalars().all()}
+
+
 def _expense_stmt():
     return (
         select(
@@ -43,15 +73,21 @@ def _expense_stmt():
             Expense.description,
             Expense.place_id,
             Expense.trip_id,
+            Expense.paid_by_participant_id,
             Expense.date,
             Expense.created_at,
             Expense.updated_at,
             Place.name.label("place_name"),
             Place.region.label("city"),
             Trip.name.label("trip_name"),
+            TripParticipant.name.label("paid_by_participant_name"),
         )
         .outerjoin(Place, Place.id == Expense.place_id)
         .outerjoin(Trip, Trip.id == Expense.trip_id)
+        .outerjoin(
+            TripParticipant,
+            TripParticipant.id == Expense.paid_by_participant_id,
+        )
     )
 
 
@@ -74,32 +110,10 @@ def _visit_stmt():
     )
 
 
-async def _require_place(db: AsyncSession, place_id: UUID) -> None:
-    if await db.get(Place, place_id) is None:
-        raise HTTPException(status_code=404, detail="Place not found")
-
-
-async def _require_trip(db: AsyncSession, trip_id: UUID) -> None:
-    if await db.get(Trip, trip_id) is None:
-        raise HTTPException(status_code=404, detail="Trip not found")
-
-
-def _serialize_expense(row) -> dict:
-    return {
-        "id": str(row.id),
-        "amount": float(row.amount),
-        "currency": row.currency,
-        "category": row.category,
-        "description": row.description,
-        "place_id": str(row.place_id) if row.place_id else None,
-        "place_name": row.place_name,
-        "city": row.city,
-        "trip_id": str(row.trip_id) if row.trip_id else None,
-        "trip_name": row.trip_name,
-        "date": row.date,
-        "created_at": row.created_at,
-        "updated_at": row.updated_at,
-    }
+def _apply_city_filter(stmt, city: str | None):
+    if city:
+        stmt = stmt.where(Place.region.ilike(f"%{city.strip()}%"))
+    return stmt
 
 
 def _serialize_visit(row) -> dict:
@@ -117,10 +131,138 @@ def _serialize_visit(row) -> dict:
     }
 
 
-def _apply_city_filter(stmt, city: str | None):
-    if city:
-        stmt = stmt.where(Place.region.ilike(f"%{city.strip()}%"))
-    return stmt
+async def _load_splits_for_expenses(
+    db: AsyncSession, expense_ids: list[UUID]
+) -> dict[UUID, list[dict]]:
+    if not expense_ids:
+        return {}
+
+    result = await db.execute(
+        select(
+            ExpenseSplit.expense_id,
+            ExpenseSplit.participant_id,
+            ExpenseSplit.share_amount,
+            TripParticipant.name.label("participant_name"),
+        )
+        .join(TripParticipant, TripParticipant.id == ExpenseSplit.participant_id)
+        .where(ExpenseSplit.expense_id.in_(expense_ids))
+        .order_by(TripParticipant.created_at.asc(), TripParticipant.name.asc())
+    )
+
+    grouped: dict[UUID, list[dict]] = defaultdict(list)
+    for row in result.all():
+        grouped[row.expense_id].append(
+            {
+                "participant_id": str(row.participant_id),
+                "participant_name": row.participant_name,
+                "amount": float(row.share_amount),
+            }
+        )
+    return grouped
+
+
+async def _serialize_expenses(db: AsyncSession, rows) -> list[dict]:
+    expense_ids = [row.id for row in rows]
+    splits_by_expense = await _load_splits_for_expenses(db, expense_ids)
+
+    data = []
+    for row in rows:
+        splits = splits_by_expense.get(row.id, [])
+        data.append(
+            {
+                "id": str(row.id),
+                "amount": float(row.amount),
+                "currency": row.currency,
+                "category": row.category,
+                "description": row.description,
+                "place_id": str(row.place_id) if row.place_id else None,
+                "place_name": row.place_name,
+                "city": row.city,
+                "trip_id": str(row.trip_id) if row.trip_id else None,
+                "trip_name": row.trip_name,
+                "paid_by_participant_id": (
+                    str(row.paid_by_participant_id)
+                    if row.paid_by_participant_id
+                    else None
+                ),
+                "paid_by_participant_name": row.paid_by_participant_name,
+                "split_participant_ids": [
+                    split["participant_id"] for split in splits
+                ],
+                "split_participant_names": [
+                    split["participant_name"] for split in splits
+                ],
+                "date": row.date,
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+            }
+        )
+    return data
+
+
+def _split_amount_evenly(total: Decimal, participant_ids: list[UUID]) -> dict[UUID, Decimal]:
+    quantized_total = total.quantize(_CENT, rounding=ROUND_HALF_UP)
+    count = len(participant_ids)
+    base = (quantized_total / count).quantize(_CENT, rounding=ROUND_HALF_UP)
+    shares = {participant_id: base for participant_id in participant_ids}
+    assigned = sum(shares.values(), Decimal("0.00"))
+    remainder_cents = int((quantized_total - assigned) / _CENT)
+
+    for participant_id in participant_ids[:remainder_cents]:
+        shares[participant_id] += _CENT
+
+    return shares
+
+
+def _build_settlement_transfers(participants: list[dict]) -> list[dict]:
+    debtors = []
+    creditors = []
+    for participant in participants:
+        net = Decimal(str(participant["net"]))
+        if net < 0:
+            debtors.append(
+                {
+                    "participant_id": participant["participant_id"],
+                    "participant_name": participant["participant_name"],
+                    "amount": -net,
+                }
+            )
+        elif net > 0:
+            creditors.append(
+                {
+                    "participant_id": participant["participant_id"],
+                    "participant_name": participant["participant_name"],
+                    "amount": net,
+                }
+            )
+
+    transfers = []
+    debtor_index = 0
+    creditor_index = 0
+    while debtor_index < len(debtors) and creditor_index < len(creditors):
+        debtor = debtors[debtor_index]
+        creditor = creditors[creditor_index]
+        amount = min(debtor["amount"], creditor["amount"]).quantize(
+            _CENT, rounding=ROUND_HALF_UP
+        )
+        if amount > 0:
+            transfers.append(
+                {
+                    "from_participant_id": debtor["participant_id"],
+                    "from_participant_name": debtor["participant_name"],
+                    "to_participant_id": creditor["participant_id"],
+                    "to_participant_name": creditor["participant_name"],
+                    "amount": float(amount),
+                }
+            )
+        debtor["amount"] -= amount
+        creditor["amount"] -= amount
+        if debtor["amount"] <= Decimal("0.00"):
+            debtor_index += 1
+        if creditor["amount"] <= Decimal("0.00"):
+            creditor_index += 1
+
+    return transfers
 
 
 @router.get("/expenses/summary", response_model=ExpenseSummaryResponse)
@@ -156,6 +298,117 @@ async def expense_summary(
     )
 
 
+@router.get("/expenses/settlements", response_model=TripSettlementResponse)
+async def expense_settlement(
+    trip_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    trip_uuid = _parse_uuid(trip_id, "trip_id")
+    trip = await _require_trip(db, trip_uuid)
+
+    participants = await _load_trip_participants(db, trip_uuid)
+    if not participants:
+        return TripSettlementResponse(
+            trip_id=str(trip.id),
+            trip_name=trip.name,
+            data=[],
+            message="No participants added yet",
+        )
+
+    expense_result = await db.execute(
+        select(
+            Expense.id,
+            Expense.amount,
+            Expense.currency,
+            Expense.paid_by_participant_id,
+        ).where(Expense.trip_id == trip_uuid)
+    )
+    expenses = expense_result.all()
+    expense_ids = [row.id for row in expenses]
+
+    split_result = await db.execute(
+        select(
+            ExpenseSplit.expense_id,
+            ExpenseSplit.participant_id,
+            ExpenseSplit.share_amount,
+        ).where(ExpenseSplit.expense_id.in_(expense_ids) if expense_ids else False)
+    )
+
+    currencies: dict[str, dict] = defaultdict(
+        lambda: {
+            "total_expenses": Decimal("0.00"),
+            "participants": {
+                participant_id: {
+                    "participant_id": str(participant_id),
+                    "participant_name": participant.name,
+                    "paid": Decimal("0.00"),
+                    "owed": Decimal("0.00"),
+                }
+                for participant_id, participant in participants.items()
+            },
+        }
+    )
+
+    expense_currency: dict[UUID, str] = {}
+    for expense in expenses:
+        currency_bucket = currencies[expense.currency]
+        amount = Decimal(str(expense.amount)).quantize(_CENT, rounding=ROUND_HALF_UP)
+        currency_bucket["total_expenses"] += amount
+        expense_currency[expense.id] = expense.currency
+        if expense.paid_by_participant_id in participants:
+            currency_bucket["participants"][expense.paid_by_participant_id]["paid"] += amount
+
+    for split in split_result.all():
+        currency = expense_currency.get(split.expense_id)
+        if not currency or split.participant_id not in participants:
+            continue
+        currencies[currency]["participants"][split.participant_id]["owed"] += Decimal(
+            str(split.share_amount)
+        ).quantize(_CENT, rounding=ROUND_HALF_UP)
+
+    data = []
+    for currency, bucket in currencies.items():
+        participant_rows = []
+        for participant in bucket["participants"].values():
+            paid = participant["paid"].quantize(_CENT, rounding=ROUND_HALF_UP)
+            owed = participant["owed"].quantize(_CENT, rounding=ROUND_HALF_UP)
+            net = (paid - owed).quantize(_CENT, rounding=ROUND_HALF_UP)
+            participant_rows.append(
+                {
+                    "participant_id": participant["participant_id"],
+                    "participant_name": participant["participant_name"],
+                    "paid": float(paid),
+                    "owed": float(owed),
+                    "net": float(net),
+                }
+            )
+
+        participant_rows.sort(key=lambda item: item["participant_name"].lower())
+        transfers = _build_settlement_transfers(participant_rows)
+        data.append(
+            TripSettlementCurrencyGroup(
+                currency=currency,
+                total_expenses=float(
+                    bucket["total_expenses"].quantize(_CENT, rounding=ROUND_HALF_UP)
+                ),
+                participants=[
+                    TripBalanceParticipant(**participant) for participant in participant_rows
+                ],
+                transfers=[
+                    TripSettlementTransfer(**transfer) for transfer in transfers
+                ],
+            )
+        )
+
+    data.sort(key=lambda item: item.currency)
+    return TripSettlementResponse(
+        trip_id=str(trip.id),
+        trip_name=trip.name,
+        data=data,
+        message="Trip settlement" if data else "No expenses for this trip yet",
+    )
+
+
 @router.get("/expenses", response_model=ExpenseListResponse)
 async def list_expenses(
     trip_id: str | None = None,
@@ -170,7 +423,7 @@ async def list_expenses(
     stmt = _apply_city_filter(stmt, city)
 
     result = await db.execute(stmt)
-    data = [_serialize_expense(row) for row in result.all()]
+    data = await _serialize_expenses(db, result.all())
     return ExpenseListResponse(
         data=data,
         total=len(data),
@@ -185,11 +438,45 @@ async def record_expense(
 ):
     place_uuid = _parse_uuid(payload.place_id, "place_id") if payload.place_id else None
     trip_uuid = _parse_uuid(payload.trip_id, "trip_id") if payload.trip_id else None
+    paid_by_uuid = (
+        _parse_uuid(payload.paid_by_participant_id, "paid_by_participant_id")
+        if payload.paid_by_participant_id
+        else None
+    )
+    split_participant_ids = [
+        _parse_uuid(participant_id, "split_participant_ids")
+        for participant_id in payload.split_participant_ids
+    ]
 
     if place_uuid:
         await _require_place(db, place_uuid)
+
+    trip_participants: dict[UUID, TripParticipant] = {}
     if trip_uuid:
         await _require_trip(db, trip_uuid)
+        trip_participants = await _load_trip_participants(db, trip_uuid)
+
+    if (paid_by_uuid or split_participant_ids) and not trip_uuid:
+        raise HTTPException(
+            status_code=422,
+            detail="Participant-based expense splitting requires a linked trip",
+        )
+
+    if paid_by_uuid and paid_by_uuid not in trip_participants:
+        raise HTTPException(status_code=404, detail="Paying participant not found")
+
+    if split_participant_ids:
+        invalid_ids = [
+            participant_id
+            for participant_id in split_participant_ids
+            if participant_id not in trip_participants
+        ]
+        if invalid_ids:
+            raise HTTPException(status_code=404, detail="Split participant not found")
+
+    split_targets = split_participant_ids.copy()
+    if trip_uuid and paid_by_uuid and not split_targets:
+        split_targets = [paid_by_uuid]
 
     expense_kwargs = {
         "amount": payload.amount,
@@ -198,16 +485,34 @@ async def record_expense(
         "description": payload.description,
         "place_id": place_uuid,
         "trip_id": trip_uuid,
+        "paid_by_participant_id": paid_by_uuid,
     }
     if payload.date is not None:
         expense_kwargs["date"] = payload.date
 
     expense = Expense(**expense_kwargs)
     db.add(expense)
+    await db.flush()
+
+    if split_targets:
+        split_map = _split_amount_evenly(
+            Decimal(str(payload.amount)),
+            split_targets,
+        )
+        for participant_id, share_amount in split_map.items():
+            db.add(
+                ExpenseSplit(
+                    expense_id=expense.id,
+                    participant_id=participant_id,
+                    share_amount=share_amount,
+                )
+            )
+
     await db.commit()
 
     result = await db.execute(_expense_stmt().where(Expense.id == expense.id))
-    return ExpenseResponse(**_serialize_expense(result.one()))
+    serialized = await _serialize_expenses(db, result.all())
+    return ExpenseResponse(**serialized[0])
 
 
 @router.get("/visits", response_model=VisitListResponse)

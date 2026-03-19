@@ -9,10 +9,10 @@ export default createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', redirect: '/map' },
-    { path: '/map', component: MapView },
-    { path: '/saved', component: SavedView },
-    { path: '/trips', component: TripsView },
-    { path: '/tracking', component: TrackingView },
-    { path: '/more', component: MoreView },
+    { path: '/map', name: 'map', component: MapView },
+    { path: '/saved', name: 'saved', component: SavedView },
+    { path: '/trips', name: 'trips', component: TripsView },
+    { path: '/tracking', name: 'tracking', component: TrackingView },
+    { path: '/more', name: 'more', component: MoreView },
   ],
 })

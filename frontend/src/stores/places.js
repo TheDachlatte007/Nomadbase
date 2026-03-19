@@ -16,27 +16,30 @@ export const usePlacesStore = defineStore('places', () => {
   let _lastQuery = ''
   let _lastPlaceType = ''
   let _lastTagFilters = ''
+  let _lastTripId = ''
   let _lastOffset = 0
 
   // Keep isOffline in sync with browser events
   window.addEventListener('online', () => { isOffline.value = false })
   window.addEventListener('offline', () => { isOffline.value = true })
 
-  async function fetchPlaces(query = '', placeType = '', tagFilters = '') {
+  async function fetchPlaces(query = '', placeType = '', tagFilters = '', tripId = '') {
     loading.value = true
     cacheSource.value = null
     _lastQuery = query
     _lastPlaceType = placeType
     _lastTagFilters = tagFilters
+    _lastTripId = tripId
     _lastOffset = 0
 
-    const cacheKey = buildCacheKey(query, placeType, tagFilters)
+    const cacheKey = buildCacheKey(query, `${placeType}|${tagFilters}|${tripId || 'all-trips'}`, '')
 
     try {
       const params = new URLSearchParams()
       if (query) params.set('q', query)
       if (placeType) params.set('place_type', placeType)
       if (tagFilters) params.set('tag_filters', tagFilters)
+      if (tripId) params.set('trip_id', tripId)
       params.set('limit', PAGE_SIZE)
       params.set('offset', 0)
 
@@ -90,6 +93,7 @@ export const usePlacesStore = defineStore('places', () => {
       if (_lastQuery) params.set('q', _lastQuery)
       if (_lastPlaceType) params.set('place_type', _lastPlaceType)
       if (_lastTagFilters) params.set('tag_filters', _lastTagFilters)
+      if (_lastTripId) params.set('trip_id', _lastTripId)
       params.set('limit', PAGE_SIZE)
       params.set('offset', _lastOffset)
       const res = await fetch(`/api/map/places?${params.toString()}`)
