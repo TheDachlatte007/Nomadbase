@@ -1,4 +1,6 @@
-from datetime import date, datetime
+from __future__ import annotations
+
+from datetime import date as date_type, datetime
 
 from pydantic import BaseModel, Field
 
@@ -10,7 +12,7 @@ class ExpenseCreateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
     place_id: str | None = None
     trip_id: str | None = None
-    date: date | None = None
+    date: date_type | None = None
 
 
 class ExpenseResponse(BaseModel):
@@ -24,7 +26,7 @@ class ExpenseResponse(BaseModel):
     city: str | None = None
     trip_id: str | None = None
     trip_name: str | None = None
-    date: date
+    date: date_type
     created_at: datetime
     updated_at: datetime | None = None
 

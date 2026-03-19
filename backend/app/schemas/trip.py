@@ -1,4 +1,6 @@
-from datetime import date, datetime
+from __future__ import annotations
+
+from datetime import date as date_type, datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -6,8 +8,8 @@ from pydantic import BaseModel, Field
 
 class TripUpdateRequest(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
+    start_date: Optional[date_type] = None
+    end_date: Optional[date_type] = None
     notes: Optional[str] = Field(default=None, max_length=4000)
 
 
@@ -20,8 +22,8 @@ class TripCityCreateRequest(BaseModel):
 
 class TripCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    start_date: date | None = None
-    end_date: date | None = None
+    start_date: date_type | None = None
+    end_date: date_type | None = None
     notes: str | None = Field(default=None, max_length=4000)
 
 
@@ -38,8 +40,8 @@ class TripCityResponse(BaseModel):
 class TripResponse(BaseModel):
     id: str
     name: str
-    start_date: date | None = None
-    end_date: date | None = None
+    start_date: date_type | None = None
+    end_date: date_type | None = None
     notes: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
