@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from app.config import settings
 from app.routers import health, map, saves, trips, tracking, admin
 
@@ -25,3 +28,26 @@ app.include_router(saves.router, prefix="/api/saves", tags=["saves"])
 app.include_router(trips.router, prefix="/api/trips", tags=["trips"])
 app.include_router(tracking.router, prefix="/api/tracking", tags=["tracking"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+
+frontend_dist = Path(__file__).resolve().parent / "static"
+
+if frontend_dist.exists():
+    index_file = frontend_dist / "index.html"
+
+    @app.get("/", include_in_schema=False)
+    async def serve_index():
+        return FileResponse(index_file)
+
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        requested = (frontend_dist / full_path).resolve()
+        try:
+            requested.relative_to(frontend_dist.resolve())
+        except ValueError:
+            return FileResponse(index_file)
+
+        if requested.is_file():
+            return FileResponse(requested)
+
+        return FileResponse(index_file)

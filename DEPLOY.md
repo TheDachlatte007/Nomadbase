@@ -7,8 +7,7 @@ This repository is prepared for a first private deployment through GitHub and Po
 ## Services
 
 - `db`: PostgreSQL 16 with PostGIS 3.4
-- `api`: FastAPI backend on port `8000`
-- `frontend`: static web shell with nginx proxy on port `80`
+- `app`: single FastAPI container that serves both the API and the built Vue frontend on port `8000`
 
 ## Required environment
 
@@ -18,7 +17,7 @@ The bundled Postgres service is configured for passwordless local alpha deployme
 
 ## Expected first-run behavior
 
-The API container runs:
+The app container runs:
 
 1. `alembic upgrade head`
 2. `python -m app.seed_alpha` when `SEED_ALPHA_DATA=true`
@@ -38,11 +37,10 @@ Open:
 - `/api/health`
 - `/api/docs`
 
-The homepage should show a frontend shell and try to read API health through nginx.
+The homepage should be served directly by the FastAPI app container.
 The map tab should render alpha sample places right away after a healthy first boot.
 
 ## Known limitations
 
-- The frontend is a thin first-deploy shell, not the full product UI yet.
-- `trips`, `tracking`, and `admin` are still mostly placeholder endpoints.
-- Local Docker runtime was not verifiable in this coding session because Docker Desktop was failing in the IDE environment.
+- The project still needs real deployment verification because Docker was not runnable in this IDE session.
+- `trips`, `tracking`, and `admin` are functional alpha flows, but not yet hardened production features.

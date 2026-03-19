@@ -1,6 +1,37 @@
 #!/bin/sh
 set -eu
 
+echo "Waiting for database..."
+python - <<'PY'
+import asyncio
+import os
+import sys
+
+import asyncpg
+
+
+DATABASE_URL = os.environ["DATABASE_URL"].replace("+asyncpg", "")
+
+
+async def main():
+    for attempt in range(30):
+        try:
+            conn = await asyncpg.connect(DATABASE_URL)
+            await conn.execute("SELECT 1")
+            await conn.close()
+            print("Database is reachable")
+            return
+        except Exception as exc:
+            print(f"Database not ready yet ({attempt + 1}/30): {exc}")
+            await asyncio.sleep(2)
+
+    print("Database did not become reachable in time", file=sys.stderr)
+    raise SystemExit(1)
+
+
+asyncio.run(main())
+PY
+
 echo "Running migrations..."
 alembic upgrade head
 

@@ -1,0 +1,10 @@
+.git
+.gitignore
+.claude
+.planning
+frontend/node_modules
+frontend/dist
+backend/__pycache__
+backend/.venv
+**/__pycache__
+**/*.pyc
