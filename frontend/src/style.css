@@ -312,6 +312,33 @@ code {
   gap: 10px;
 }
 
+.place-actions {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.7);
+  overflow: hidden;
+}
+
+.place-actions summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.85rem 0.95rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.place-actions summary::-webkit-details-marker {
+  display: none;
+}
+
+.place-actions[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.place-actions .save-form {
+  padding: 0.9rem;
+}
+
 .trip-form,
 .tracking-form,
 .preferences-form {
@@ -459,6 +486,34 @@ code {
   flex-wrap: wrap;
   gap: 6px;
   padding: 6px 0 2px;
+}
+
+.map-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0 2px;
+}
+
+.map-preset-button {
+  padding: 0.65rem 0.85rem;
+}
+
+.map-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.map-filter-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.map-helper {
+  padding-top: 8px;
 }
 
 .tag-chip {
@@ -729,6 +784,20 @@ code {
   .trip-actions,
   .entry-actions {
     width: 100%;
+  }
+
+  .map-scope-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .map-preset-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .map-preset-row > * {
+    width: 100%;
+    justify-content: center;
   }
 
   .trip-actions > *,

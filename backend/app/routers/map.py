@@ -238,7 +238,9 @@ def _parse_search_context(
             if inferred_place_type == mapped_place_type:
                 continue
         if term in _TAG_TERM_MAP:
-            inferred_tag_filters.add(_TAG_TERM_MAP[term])
+            # Search terms like "vegan" should broaden discovery, not silently
+            # collapse the result set into strict OSM metadata filters.
+            free_text_terms.append(term)
             continue
         if term in _STOP_WORDS:
             continue
@@ -252,12 +254,16 @@ def _tag_predicate(tag_key: str):
         return or_(
             Place.tags.contains(cast(json.dumps({"diet:vegan": "yes"}), JSONB)),
             Place.tags.contains(cast(json.dumps({"diet:vegan": "only"}), JSONB)),
+            Place.tags.contains(cast(json.dumps({"diet:vegan": "limited"}), JSONB)),
         )
     if tag_key == "vegetarian":
         return or_(
             Place.tags.contains(cast(json.dumps({"diet:vegetarian": "yes"}), JSONB)),
             Place.tags.contains(
                 cast(json.dumps({"diet:vegetarian": "only"}), JSONB)
+            ),
+            Place.tags.contains(
+                cast(json.dumps({"diet:vegetarian": "limited"}), JSONB)
             ),
         )
     if tag_key == "outdoor_seating":
@@ -379,7 +385,13 @@ async def list_places(
                     Place.tags.contains(cast(json.dumps({"diet:vegan": "yes"}), JSONB)),
                     1,
                 ),
-                else_=2,
+                (
+                    Place.tags.contains(
+                        cast(json.dumps({"diet:vegan": "limited"}), JSONB)
+                    ),
+                    2,
+                ),
+                else_=3,
             )
         )
 
@@ -398,7 +410,13 @@ async def list_places(
                     ),
                     1,
                 ),
-                else_=2,
+                (
+                    Place.tags.contains(
+                        cast(json.dumps({"diet:vegetarian": "limited"}), JSONB)
+                    ),
+                    2,
+                ),
+                else_=3,
             )
         )
 

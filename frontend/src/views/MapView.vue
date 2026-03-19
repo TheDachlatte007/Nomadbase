@@ -12,10 +12,6 @@
       <div class="map-toolbar">
         <form class="toolbar" @submit.prevent="onSearch">
           <input v-model="searchQuery" type="search" placeholder="Search places, food, or city…">
-          <select v-model="selectedTripId">
-            <option value="">All imported regions</option>
-            <option v-for="trip in trips" :key="trip.id" :value="trip.id">{{ trip.name }}</option>
-          </select>
           <select v-model="placeType">
             <option value="">All types</option>
             <option value="park">Park</option>
@@ -34,6 +30,33 @@
             @click="onNearMe"
           >{{ nearMeText }}</button>
         </form>
+        <div class="map-preset-row">
+          <button
+            v-for="preset in SEARCH_PRESETS"
+            :key="preset.label"
+            class="secondary-button action-button map-preset-button"
+            type="button"
+            @click="applyPreset(preset)"
+          >
+            {{ preset.label }}
+          </button>
+        </div>
+        <div class="map-scope-grid">
+          <label class="map-filter-field">
+            <span class="card-eyebrow">Trip scope</span>
+            <select v-model="selectedTripId" @change="onScopeChange">
+              <option value="">All trips</option>
+              <option v-for="trip in trips" :key="trip.id" :value="trip.id">{{ trip.name }}</option>
+            </select>
+          </label>
+          <label class="map-filter-field">
+            <span class="card-eyebrow">Imported region</span>
+            <select v-model="selectedRegion" @change="onScopeChange">
+              <option value="">All imported regions</option>
+              <option v-for="region in importedRegions" :key="region" :value="region">{{ region }}</option>
+            </select>
+          </label>
+        </div>
         <div class="tag-filter-row">
           <span
             v-for="chip in TAG_CHIPS"
@@ -44,8 +67,10 @@
           >{{ chip.label }}</span>
         </div>
         <p class="muted map-helper">
-          {{ activeTrip ? `Scoped to ${activeTrip.name}.` : 'No trip scope selected.' }}
-          Search for things like <code>vegan restaurant</code> and refine with tags.
+          {{ activeTrip ? `Trip scoped to ${activeTrip.name}.` : 'Trip scope is optional.' }}
+          {{ selectedRegion ? ` Region filter: ${selectedRegion}.` : ' Imported region filter is optional.' }}
+          Search for things like <code>vegan restaurant toronto</code>.
+          The vegan chip is a strict OSM metadata filter.
         </p>
       </div>
 
@@ -55,6 +80,9 @@
         <p v-if="loading && !places.length" class="empty-state">Loading places…</p>
         <div v-else-if="!loading && !places.length" class="empty-state-wrap">
           <p class="empty-state">No places found{{ searchQuery ? ` for "${searchQuery}"` : ' for the current filters' }}.</p>
+          <p v-if="activeTagFilters.has('vegan')" class="muted" style="font-size:.88rem;margin:0">
+            The vegan filter only keeps places with explicit OSM vegan tags. Try the query without the chip for broader vegan-friendly matches.
+          </p>
           <template v-if="searchQuery && !activeTagFilters.size">
             <p class="muted" style="font-size:.88rem;margin:4px 0 8px">Not in the database yet? Import from OpenStreetMap:</p>
             <button
@@ -93,16 +121,19 @@
             <a v-if="place.wikipedia_url" :href="place.wikipedia_url" target="_blank" rel="noreferrer">Wikipedia</a>
           </div>
 
-          <form class="save-form" @submit.prevent="onSavePlace(place)">
-            <select v-model="saveForms[place.id].status">
-              <option value="want_to_visit">Want to visit</option>
-              <option value="visited">Visited</option>
-              <option value="favorite">Favorite</option>
-            </select>
-            <textarea v-model="saveForms[place.id].notes" placeholder="Quick note for future you"></textarea>
-            <button class="action-button" type="submit">Save place</button>
-            <p v-if="saveForms[place.id].feedback" class="feedback">{{ saveForms[place.id].feedback }}</p>
-          </form>
+          <details class="place-actions" @click.stop>
+            <summary>Save or note</summary>
+            <form class="save-form" @submit.prevent="onSavePlace(place)">
+              <select v-model="saveForms[place.id].status">
+                <option value="want_to_visit">Want to visit</option>
+                <option value="visited">Visited</option>
+                <option value="favorite">Favorite</option>
+              </select>
+              <textarea v-model="saveForms[place.id].notes" placeholder="Quick note for future you"></textarea>
+              <button class="action-button" type="submit">Save place</button>
+              <p v-if="saveForms[place.id].feedback" class="feedback">{{ saveForms[place.id].feedback }}</p>
+            </form>
+          </details>
         </article>
       </div>
 
@@ -147,10 +178,17 @@ const hasMore = computed(() => placesStore.hasMore)
 const totalAvailable = computed(() => placesStore.totalAvailable)
 const trips = computed(() => tripsStore.trips)
 const activeTrip = computed(() => tripsStore.activeTrip)
+const importedRegions = computed(() => {
+  return (adminStore.imports || [])
+    .map((item) => item.region)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+})
 
 const searchQuery = ref('')
 const placeType = ref('')
 const selectedTripId = ref(tripsStore.activeTripId || '')
+const selectedRegion = ref('')
 const nearMeText = ref('Near me')
 const nearMeLoading = ref(false)
 const mapEl = ref(null)
@@ -163,6 +201,14 @@ const TAG_CHIPS = [
   { key: 'outdoor_seating', label: 'Outdoor seating' },
   { key: 'wifi', label: 'WiFi' },
   { key: 'wheelchair', label: 'Wheelchair' },
+]
+const SEARCH_PRESETS = [
+  { label: 'Food', query: '', placeType: 'restaurant', tags: [] },
+  { label: 'Coffee', query: 'coffee', placeType: 'cafe', tags: [] },
+  { label: 'Vegan-friendly', query: 'vegan', placeType: 'restaurant', tags: [] },
+  { label: 'Churches', query: 'church', placeType: 'cultural', tags: [] },
+  { label: 'Sights', query: 'sights', placeType: 'attraction', tags: [] },
+  { label: 'Nature', query: 'nature', placeType: 'park', tags: [] },
 ]
 const activeTagFilters = reactive(new Set())
 
@@ -301,6 +347,7 @@ function syncMarkers(newPlaces) {
 watch(places, syncMarkers)
 
 onMounted(() => {
+  adminStore.fetchImports().catch(() => {})
   map = L.map(mapEl.value, { zoomControl: true }).setView([20, 10], 2)
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -327,7 +374,29 @@ onUnmounted(() => {
 
 function runSearch() {
   const tagStr = [...activeTagFilters].join(',')
-  return placesStore.fetchPlaces(searchQuery.value, placeType.value, tagStr, selectedTripId.value)
+  return placesStore.fetchPlaces(
+    searchQuery.value,
+    placeType.value,
+    tagStr,
+    selectedTripId.value,
+    selectedRegion.value
+  )
+}
+
+function applyPreset(preset) {
+  searchQuery.value = preset.query
+  placeType.value = preset.placeType
+  activeTagFilters.clear()
+  for (const tag of preset.tags || []) {
+    activeTagFilters.add(tag)
+  }
+  runSearch().catch(() => {})
+}
+
+function onScopeChange() {
+  importFeedback.value = ''
+  tripsStore.setActiveTrip(selectedTripId.value)
+  runSearch().catch(() => {})
 }
 
 function toggleTagFilter(key) {
@@ -395,6 +464,7 @@ async function onInlineImport() {
     if (result.imported === 0) {
       importFeedback.value = `No named places found for "${searchQuery.value}". Try a different spelling or add the country.`
     } else {
+      selectedRegion.value = result.region || selectedRegion.value
       importFeedback.value = `Imported ${result.imported} places for ${result.region}. Loading…`
       await runSearch()
     }

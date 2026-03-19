@@ -162,6 +162,16 @@ async def _load_splits_for_expenses(
     return grouped
 
 
+async def _load_split_participant_ids(
+    db: AsyncSession,
+    expense_id: UUID,
+) -> list[str]:
+    result = await db.execute(
+        select(ExpenseSplit.participant_id).where(ExpenseSplit.expense_id == expense_id)
+    )
+    return [str(participant_id) for participant_id in result.scalars().all()]
+
+
 async def _serialize_expenses(db: AsyncSession, rows) -> list[dict]:
     expense_ids = [row.id for row in rows]
     splits_by_expense = await _load_splits_for_expenses(db, expense_ids)
@@ -552,14 +562,52 @@ async def update_expense(
     if expense is None:
         raise HTTPException(status_code=404, detail="Expense not found")
 
-    expense_fields, split_targets = await _prepare_expense_payload(db, payload)
+    provided_fields = payload.model_fields_set
+
+    merged_payload = ExpenseCreateRequest(
+        amount=payload.amount if payload.amount is not None else float(expense.amount),
+        currency=payload.currency or expense.currency,
+        category=payload.category or expense.category,
+        description=(
+            payload.description
+            if "description" in provided_fields
+            else expense.description
+        ),
+        place_id=(
+            payload.place_id
+            if "place_id" in provided_fields
+            else (str(expense.place_id) if expense.place_id else None)
+        ),
+        trip_id=(
+            payload.trip_id
+            if "trip_id" in provided_fields
+            else (str(expense.trip_id) if expense.trip_id else None)
+        ),
+        paid_by_participant_id=(
+            payload.paid_by_participant_id
+            if "paid_by_participant_id" in provided_fields
+            else (
+                str(expense.paid_by_participant_id)
+                if expense.paid_by_participant_id
+                else None
+            )
+        ),
+        split_participant_ids=(
+            payload.split_participant_ids
+            if "split_participant_ids" in provided_fields
+            else await _load_split_participant_ids(db, expense.id)
+        ),
+        date=payload.date if "date" in provided_fields else expense.date,
+    )
+
+    expense_fields, split_targets = await _prepare_expense_payload(db, merged_payload)
     for field, value in expense_fields.items():
         setattr(expense, field, value)
 
     await _replace_expense_splits(
         db,
         expense.id,
-        Decimal(str(payload.amount)),
+        Decimal(str(merged_payload.amount)),
         split_targets,
     )
     await db.commit()

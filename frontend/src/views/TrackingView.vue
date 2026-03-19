@@ -196,8 +196,21 @@
               >
                 {{ savingExpense ? 'Saving...' : expenseSubmitLabel }}
               </button>
+              <div v-if="splitPreview.length" class="summary-list">
+                <article
+                  v-for="item in splitPreview"
+                  :key="item.participantId"
+                  class="summary-item"
+                >
+                  <strong>{{ item.name }}</strong>
+                  <span>{{ formatMoney(item.amount, expForm.currency || 'EUR') }}</span>
+                </article>
+              </div>
               <p v-if="expenseFeedback" class="feedback">{{ expenseFeedback }}</p>
               <p v-if="expenseHint" class="muted">{{ expenseHint }}</p>
+              <p v-if="editingExpenseId" class="muted">
+                Existing expenses only change when you save this edit. Adding new participants does not rewrite old splits automatically.
+              </p>
             </form>
           </section>
 
@@ -385,6 +398,22 @@ const summaryItems = computed(() => trackingStore.summary?.data || [])
 const summaryTotal = computed(() => trackingStore.summary?.total_amount || 0)
 const summaryCurrency = computed(() => trackingStore.summary?.currency || 'EUR')
 const settlementGroups = computed(() => trackingStore.settlements?.data || [])
+const splitPreview = computed(() => {
+  const total = Number(expForm.amount)
+  const participantIds = expForm.split_participant_ids || []
+  if (!participantIds.length || !Number.isFinite(total) || total <= 0) return []
+
+  const share = total / participantIds.length
+  const rounded = share.toFixed(2)
+  return participantIds.map((participantId) => {
+    const participant = activeParticipants.value.find((entry) => entry.id === participantId)
+    return {
+      participantId,
+      name: participant?.name || 'Unknown participant',
+      amount: Number(rounded),
+    }
+  })
+})
 
 const selectedTripId = computed({
   get: () => tripsStore.activeTripId,

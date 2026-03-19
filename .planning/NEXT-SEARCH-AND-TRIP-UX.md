@@ -12,6 +12,7 @@ NomadBase should become a trip-scoped travel database first:
 1. Search quality over more raw place volume.
 - Interpret intent words such as `vegan`, `vegetarian`, `restaurant`, `coffee`, `church`.
 - Rank results by diet/type/location relevance instead of mostly alphabetic order.
+- Keep broad text intent separate from strict tag filters so `vegan restaurant toronto` still finds candidates.
 - Keep OpenStreetMap as the primary source for now because the product goal is an owned database.
 
 2. Editable shared expenses.
@@ -22,6 +23,8 @@ NomadBase should become a trip-scoped travel database first:
 3. Mobile-first hardening.
 - Button groups and list cards must stack cleanly.
 - Long participant names, place names, and metadata should wrap instead of overflowing.
+- Split map controls into query, trip scope, and imported region scope.
+- Keep secondary actions like saving places collapsible on small screens.
 
 ## Recommended Next Phases
 
