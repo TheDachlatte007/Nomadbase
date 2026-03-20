@@ -29,5 +29,7 @@ data/
 
 # IDE and local tooling
 .claude/
+.playwright-cli/
+.planning/debug/
 .DS_Store
 Thumbs.db
