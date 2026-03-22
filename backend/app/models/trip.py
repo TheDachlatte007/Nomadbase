@@ -14,7 +14,12 @@ class Trip(TimestampMixin, Base):
     end_date = Column(Date, nullable=True)
     notes = Column(Text, nullable=True)
 
-    cities = relationship("City", back_populates="trip", cascade="all, delete-orphan")
+    cities = relationship(
+        "City",
+        back_populates="trip",
+        cascade="all, delete-orphan",
+        order_by="City.sort_order",
+    )
     participants = relationship(
         "TripParticipant", back_populates="trip", cascade="all, delete-orphan"
     )

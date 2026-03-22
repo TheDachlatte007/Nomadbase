@@ -561,6 +561,18 @@ code {
   gap: 8px;
 }
 
+.city-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.city-order-btn {
+  padding: 0.45rem 0.7rem;
+  min-width: auto;
+}
+
 .city-remove-btn {
   border: 0;
   background: none;
@@ -639,6 +651,77 @@ code {
   box-shadow: 0 10px 24px rgba(200, 111, 49, 0.12);
 }
 
+.trip-overview-card {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, rgba(255, 249, 240, 0.9), rgba(215, 235, 231, 0.62));
+}
+
+.route-overview-list {
+  display: grid;
+  gap: 10px;
+}
+
+.trip-planner {
+  display: grid;
+  gap: 14px;
+}
+
+.route-map {
+  height: 320px;
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: #e8e0d0;
+  overflow: hidden;
+}
+
+.trip-planner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.trip-planner-city {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.trip-planner-city--muted {
+  background: rgba(143, 124, 106, 0.08);
+}
+
+.route-place-list {
+  display: grid;
+  gap: 8px;
+}
+
+.route-place-button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+}
+
+.route-place-button:hover {
+  border-color: rgba(15, 92, 82, 0.35);
+  background: rgba(215, 235, 231, 0.42);
+}
+
 .chip--active-context {
   background: rgba(200, 111, 49, 0.14);
   color: #99511f;
@@ -664,6 +747,11 @@ code {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.saved-card-controls {
+  display: grid;
+  gap: 8px;
 }
 
 .participant-select {
@@ -816,7 +904,16 @@ code {
     align-items: flex-start;
   }
 
+  .city-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   #map-view {
     height: 340px;
+  }
+
+  .route-map {
+    height: 280px;
   }
 }

@@ -67,7 +67,7 @@ The repo now contains a working alpha data flow for `places` and `saves`, includ
 **Plans**: TBD
 
 Current reality note:
-Trip creation and city assignment are live in alpha form through the API and frontend shell. Saved-place assignment into trip cities and the dedicated trip map/list view are still open.
+Trip creation, ordered city routes, participant management, city-assigned trip saves, and a first trip map/list planner are now live in alpha form. The biggest open pieces are richer city-level summaries, smarter assignment guidance, and later search/import depth.
 
 ### Phase 4: Tracking
 **Goal**: Users can record what they spend and where they go, and see a summary of expenses by category

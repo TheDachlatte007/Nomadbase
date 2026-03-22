@@ -34,17 +34,24 @@ NomadBase should become a trip-scoped travel database first:
 - Improve place cards so imported OSM metadata is surfaced more clearly.
 
 ### Phase 2: Trip-scoped saves
-- Add `trip_id` to saved places.
-- Allow one place to be saved globally or for a specific trip.
-- Show trip-specific shortlists such as `food`, `churches`, `nature`, `backup options`.
-- Keep the map save flow lightweight: default to the active trip, but allow switching back to a global shortlist.
+- Done in alpha.
+- Saved places can live globally or inside one trip.
+- The remaining follow-up is better editing and assignment UX, not the base data model.
 
 ### Phase 3: Route overview
-- Let a trip define an ordered city route.
-- Generate a simple per-city overview:
-  - top places by category
-  - food / coffee / vegan / nature / culture counts
-  - saved shortlist and recent notes
+- Now started in alpha.
+- Trips can define an ordered city route.
+- Trip saves can now be assigned to one of the trip cities.
+- The current overview covers:
+  - ordered route
+  - saved count per city
+  - favorites / want-to-visit counts
+  - lightweight place-type summary
+  - trip planner map/list view with grouped city saves
+  - visibility for unassigned trip saves
+- Remaining follow-up:
+  - better city-level notes and highlights
+  - optional auto-suggestions for unassigned trip saves
 
 ### Phase 4: Live search enrichment
 - Continue importing OSM into the local DB as the canonical dataset.
@@ -59,6 +66,13 @@ NomadBase should become a trip-scoped travel database first:
   - summarize a route
   - suggest category mixes per city
   - automate repetitive trip setup
+
+## Next Recommended Build Order
+
+1. Search v1.2 with stronger ranking for intent + region matching.
+2. Import pipeline v1 so admin actions become real ingestion jobs instead of informational UI.
+3. Trip planner follow-up: city highlights, city notes, and smarter unassigned-save suggestions.
+4. Smoke-test scripts for deploy verification after each Portainer rollout.
 
 ## Constraints
 

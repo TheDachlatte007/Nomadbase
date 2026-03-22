@@ -72,6 +72,39 @@
               </span>
             </div>
 
+            <section
+              v-if="activeTripId === trip.id && overview"
+              class="trip-overview-card"
+            >
+              <div class="stack-between stack-between--tight">
+                <div>
+                  <p class="card-eyebrow">Route overview</p>
+                  <h4>{{ overview.trip_name }}</h4>
+                </div>
+                <p class="muted">
+                  {{ overview.total_saved_places }} trip saves ·
+                  {{ overview.unassigned_saved_places }} unassigned
+                </p>
+              </div>
+
+              <div class="summary-list">
+                <article class="summary-item">
+                  <strong>{{ overview.city_count }}</strong>
+                  <span class="muted">{{ overview.city_count === 1 ? 'city in route' : 'cities in route' }}</span>
+                </article>
+                <article class="summary-item">
+                  <strong>{{ overview.participant_count }}</strong>
+                  <span class="muted">{{ overview.participant_count === 1 ? 'traveler' : 'travelers' }}</span>
+                </article>
+                <article class="summary-item">
+                  <strong>{{ overview.assigned_saved_places }}</strong>
+                  <span class="muted">saves already assigned to a city</span>
+                </article>
+              </div>
+              <TripRoutePlanner v-if="overview.cities.length || overview.unassigned_places.length" :overview="overview" />
+              <p v-else class="muted">Add cities first to build a route overview.</p>
+            </section>
+
             <div class="trip-sections">
               <section class="trip-section">
                 <div class="stack-between">
@@ -95,15 +128,33 @@
                     :key="city.id"
                     class="city-list-item"
                   >
-                    <span>{{ city.name }}{{ city.country ? `, ${city.country}` : '' }}</span>
-                    <button
-                      class="city-remove-btn"
-                      :disabled="removingCity === city.id"
-                      title="Remove city"
-                      @click="onRemoveCity(trip.id, city.id)"
-                    >
-                      ×
-                    </button>
+                    <span>{{ city.sort_order + 1 }}. {{ city.name }}{{ city.country ? `, ${city.country}` : '' }}</span>
+                    <div class="city-actions">
+                      <button
+                        class="secondary-button action-button city-order-btn"
+                        type="button"
+                        :disabled="movingCity === city.id || city.sort_order === 0"
+                        @click="onMoveCity(trip, city.id, -1)"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        class="secondary-button action-button city-order-btn"
+                        type="button"
+                        :disabled="movingCity === city.id || city.sort_order === (trip.cities?.length || 1) - 1"
+                        @click="onMoveCity(trip, city.id, 1)"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        class="city-remove-btn"
+                        :disabled="removingCity === city.id"
+                        title="Remove city"
+                        @click="onRemoveCity(trip.id, city.id)"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </li>
                 </ul>
 
@@ -213,8 +264,9 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import TripRoutePlanner from '../components/TripRoutePlanner.vue'
 import { useTripsStore } from '../stores/trips.js'
 
 const router = useRouter()
@@ -222,6 +274,7 @@ const tripsStore = useTripsStore()
 const trips = computed(() => tripsStore.trips)
 const loading = computed(() => tripsStore.loading)
 const activeTripId = computed(() => tripsStore.activeTripId)
+const overview = computed(() => tripsStore.tripOverview)
 
 const creating = ref(false)
 const createFeedback = ref('')
@@ -230,11 +283,21 @@ const form = reactive({ name: '', start_date: '', end_date: '', notes: '' })
 const cityFeedback = reactive({})
 const participantFeedback = reactive({})
 const removingCity = ref(null)
+const movingCity = ref(null)
 const removingParticipant = ref(null)
 const deletingId = ref(null)
 const editingId = ref(null)
 const saving = ref(false)
 const editForm = reactive({ name: '', start_date: '', end_date: '', notes: '' })
+
+watch(
+  activeTripId,
+  async (tripId) => {
+    if (!tripId) return
+    await tripsStore.fetchTripOverview(tripId)
+  },
+  { immediate: true }
+)
 
 function onSetActiveTrip(tripId) {
   tripsStore.setActiveTrip(tripId)
@@ -290,6 +353,23 @@ async function onRemoveCity(tripId, cityId) {
     await tripsStore.removeCity(tripId, cityId)
   } finally {
     removingCity.value = null
+  }
+}
+
+async function onMoveCity(trip, cityId, direction) {
+  const cities = [...(trip.cities || [])].sort((a, b) => a.sort_order - b.sort_order)
+  const index = cities.findIndex((city) => city.id === cityId)
+  const targetIndex = index + direction
+  if (index < 0 || targetIndex < 0 || targetIndex >= cities.length) return
+
+  const [city] = cities.splice(index, 1)
+  cities.splice(targetIndex, 0, city)
+
+  movingCity.value = cityId
+  try {
+    await tripsStore.reorderCities(trip.id, cities.map((item) => item.id))
+  } finally {
+    movingCity.value = null
   }
 }
 

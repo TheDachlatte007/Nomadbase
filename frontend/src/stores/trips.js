@@ -15,7 +15,9 @@ async function readError(res, fallbackMessage) {
 export const useTripsStore = defineStore('trips', () => {
   const trips = ref([])
   const loading = ref(false)
+  const overviewLoading = ref(false)
   const activeTripId = ref(window.localStorage.getItem(ACTIVE_TRIP_KEY) || '')
+  const tripOverview = ref(null)
 
   const activeTrip = computed(
     () => trips.value.find((trip) => trip.id === activeTripId.value) || null
@@ -41,6 +43,23 @@ export const useTripsStore = defineStore('trips', () => {
     }
   }
 
+  async function fetchTripOverview(tripId = activeTripId.value) {
+    if (!tripId) {
+      tripOverview.value = null
+      return null
+    }
+
+    overviewLoading.value = true
+    try {
+      const res = await fetch(`/api/trips/${tripId}/overview`)
+      if (!res.ok) throw new Error(await readError(res, 'Failed to load trip overview'))
+      tripOverview.value = await res.json()
+      return tripOverview.value
+    } finally {
+      overviewLoading.value = false
+    }
+  }
+
   async function createTrip(data) {
     const res = await fetch('/api/trips/', {
       method: 'POST',
@@ -52,8 +71,10 @@ export const useTripsStore = defineStore('trips', () => {
     await fetchTrips()
     if (payload?.id) {
       activeTripId.value = payload.id
+      await fetchTripOverview(payload.id)
     } else if (!activeTripId.value && trips.value.length) {
       activeTripId.value = trips.value[0].id
+      await fetchTripOverview(activeTripId.value)
     }
     return payload
   }
@@ -66,6 +87,9 @@ export const useTripsStore = defineStore('trips', () => {
     })
     if (!res.ok) throw new Error(await readError(res, 'Add city failed'))
     await fetchTrips()
+    if (activeTripId.value === tripId) {
+      await fetchTripOverview(tripId)
+    }
 
     fetch('/api/admin/imports', {
       method: 'POST',
@@ -80,6 +104,22 @@ export const useTripsStore = defineStore('trips', () => {
     })
     if (!res.ok) throw new Error(await readError(res, 'Remove city failed'))
     await fetchTrips()
+    if (activeTripId.value === tripId) {
+      await fetchTripOverview(tripId)
+    }
+  }
+
+  async function reorderCities(tripId, cityIds) {
+    const res = await fetch(`/api/trips/${tripId}/cities/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ city_ids: cityIds }),
+    })
+    if (!res.ok) throw new Error(await readError(res, 'Reorder cities failed'))
+    await fetchTrips()
+    if (activeTripId.value === tripId) {
+      await fetchTripOverview(tripId)
+    }
   }
 
   async function addParticipant(tripId, data) {
@@ -90,6 +130,9 @@ export const useTripsStore = defineStore('trips', () => {
     })
     if (!res.ok) throw new Error(await readError(res, 'Add participant failed'))
     await fetchTrips()
+    if (activeTripId.value === tripId) {
+      await fetchTripOverview(tripId)
+    }
   }
 
   async function removeParticipant(tripId, participantId) {
@@ -98,6 +141,9 @@ export const useTripsStore = defineStore('trips', () => {
     })
     if (!res.ok) throw new Error(await readError(res, 'Remove participant failed'))
     await fetchTrips()
+    if (activeTripId.value === tripId) {
+      await fetchTripOverview(tripId)
+    }
   }
 
   async function updateTrip(tripId, data) {
@@ -108,6 +154,9 @@ export const useTripsStore = defineStore('trips', () => {
     })
     if (!res.ok) throw new Error(await readError(res, 'Update trip failed'))
     await fetchTrips()
+    if (activeTripId.value === tripId) {
+      await fetchTripOverview(tripId)
+    }
   }
 
   async function deleteTrip(tripId) {
@@ -116,22 +165,34 @@ export const useTripsStore = defineStore('trips', () => {
     trips.value = trips.value.filter((trip) => trip.id !== tripId)
     if (activeTripId.value === tripId) {
       activeTripId.value = trips.value[0]?.id || ''
+      if (activeTripId.value) {
+        await fetchTripOverview(activeTripId.value)
+      } else {
+        tripOverview.value = null
+      }
     }
   }
 
   function setActiveTrip(tripId) {
     activeTripId.value = tripId || ''
+    if (!activeTripId.value) {
+      tripOverview.value = null
+    }
   }
 
   return {
     trips,
     loading,
+    overviewLoading,
     activeTripId,
     activeTrip,
+    tripOverview,
     fetchTrips,
+    fetchTripOverview,
     createTrip,
     addCity,
     removeCity,
+    reorderCities,
     addParticipant,
     removeParticipant,
     updateTrip,

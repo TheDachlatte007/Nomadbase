@@ -13,6 +13,10 @@ class SavedPlace(TimestampMixin, Base):
             "trip_id",
         ),
         Index(
+            "ix_saved_places_city_id",
+            "city_id",
+        ),
+        Index(
             "uq_saved_places_place_global",
             "place_id",
             unique=True,
@@ -30,8 +34,14 @@ class SavedPlace(TimestampMixin, Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     place_id = Column(UUID(as_uuid=True), ForeignKey("places.id"), nullable=False)
     trip_id = Column(UUID(as_uuid=True), ForeignKey("trips.id"), nullable=True)
+    city_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("cities.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     status = Column(String(20), nullable=False)  # "want_to_visit", "visited", "favorite"
     notes = Column(Text, nullable=True)
 
     place = relationship("Place")
     trip = relationship("Trip")
+    city = relationship("City")

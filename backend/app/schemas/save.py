@@ -11,12 +11,14 @@ SaveStatus = Literal["want_to_visit", "visited", "favorite"]
 class SavePlaceRequest(BaseModel):
     place_id: str
     trip_id: str | None = None
+    city_id: str | None = None
     status: SaveStatus
     notes: str | None = Field(default=None, max_length=2000)
 
 
 class UpdateSavedPlaceRequest(BaseModel):
     trip_id: str | None = None
+    city_id: str | None = None
     status: SaveStatus | None = None
     notes: str | None = Field(default=None, max_length=2000)
 
@@ -26,6 +28,8 @@ class SavedPlaceResponse(BaseModel):
     place_id: str
     trip_id: str | None = None
     trip_name: str | None = None
+    city_id: str | None = None
+    city_name: str | None = None
     status: SaveStatus
     notes: str | None = None
     created_at: datetime

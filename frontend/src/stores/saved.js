@@ -36,14 +36,32 @@ export const useSavedStore = defineStore('saved', () => {
     }
   }
 
-  async function savePlace(placeId, status, notes = null, tripId = null) {
+  async function savePlace(placeId, status, notes = null, tripId = null, cityId = null) {
     const res = await fetch('/api/saves/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ place_id: placeId, trip_id: tripId, status, notes }),
+      body: JSON.stringify({
+        place_id: placeId,
+        trip_id: tripId,
+        city_id: cityId,
+        status,
+        notes,
+      }),
     })
     if (!res.ok) throw new Error(await readError(res, 'Save failed'))
     await fetchSaved(currentTripId.value, includeGlobal.value)
+  }
+
+  async function updateSaved(savedId, data) {
+    const res = await fetch(`/api/saves/${savedId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) throw new Error(await readError(res, 'Update failed'))
+    const payload = await res.json()
+    savedPlaces.value = savedPlaces.value.map((item) => (item.id === savedId ? payload : item))
+    return payload
   }
 
   async function deleteSaved(savedId) {
@@ -59,6 +77,7 @@ export const useSavedStore = defineStore('saved', () => {
     includeGlobal,
     fetchSaved,
     savePlace,
+    updateSaved,
     deleteSaved,
   }
 })

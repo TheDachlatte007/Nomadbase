@@ -58,6 +58,26 @@
                 <span class="chip">{{ s.place.place_type }}</span>
                 <span class="chip">{{ s.place.source }}</span>
                 <span v-if="s.trip_name" class="chip chip--tag">{{ s.trip_name }}</span>
+                <span v-if="s.city_name" class="chip chip--tag">{{ s.city_name }}</span>
+              </div>
+              <div v-if="s.trip_id" class="saved-card-controls">
+                <label class="map-filter-field">
+                  <span class="card-eyebrow">Trip city</span>
+                  <select
+                    :value="s.city_id || ''"
+                    @change="onAssignCity(s, $event.target.value)"
+                  >
+                    <option value="">Not assigned yet</option>
+                    <option
+                      v-for="city in getTripCities(s.trip_id)"
+                      :key="city.id"
+                      :value="city.id"
+                    >
+                      {{ city.sort_order + 1 }}. {{ city.name }}
+                    </option>
+                  </select>
+                </label>
+                <p v-if="assignmentFeedback[s.id]" class="feedback">{{ assignmentFeedback[s.id] }}</p>
               </div>
               <button
                 class="unsave-button"
@@ -83,6 +103,7 @@ const saved = computed(() => savedStore.savedPlaces)
 const loading = computed(() => savedStore.loading)
 const trips = computed(() => tripsStore.trips)
 const removing = ref(null)
+const assignmentFeedback = ref({})
 const selectedScope = ref(tripsStore.activeTripId ? `trip:${tripsStore.activeTripId}` : 'all')
 const includeGlobalWithTrip = ref(true)
 
@@ -155,10 +176,31 @@ watch(
   { immediate: true }
 )
 
+function getTripCities(tripId) {
+  return trips.value.find((trip) => trip.id === tripId)?.cities || []
+}
+
+async function onAssignCity(item, cityId) {
+  assignmentFeedback.value[item.id] = 'Updating...'
+  try {
+    await savedStore.updateSaved(item.id, { city_id: cityId || null })
+    assignmentFeedback.value[item.id] = cityId ? 'Assigned to city.' : 'Removed city assignment.'
+    if (item.trip_id && tripsStore.activeTripId === item.trip_id) {
+      await tripsStore.fetchTripOverview(item.trip_id)
+    }
+  } catch (error) {
+    assignmentFeedback.value[item.id] = error.message || 'Update failed'
+  }
+}
+
 async function onRemove(id) {
+  const item = saved.value.find((entry) => entry.id === id)
   removing.value = id
   try {
     await savedStore.deleteSaved(id)
+    if (item?.trip_id && tripsStore.activeTripId === item.trip_id) {
+      await tripsStore.fetchTripOverview(item.trip_id)
+    }
   } finally {
     removing.value = null
   }

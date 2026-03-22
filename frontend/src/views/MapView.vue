@@ -124,10 +124,23 @@
           <details class="place-actions" @click.stop>
             <summary>Save or note</summary>
             <form class="save-form" @submit.prevent="onSavePlace(place)">
-              <select v-model="saveForms[place.id].trip_id">
+              <select v-model="saveForms[place.id].trip_id" @change="onSaveScopeChange(place.id)">
                 <option value="">Global shortlist</option>
                 <option v-for="trip in trips" :key="trip.id" :value="trip.id">
                   {{ trip.name }}
+                </option>
+              </select>
+              <select
+                v-if="getTripCities(saveForms[place.id].trip_id).length"
+                v-model="saveForms[place.id].city_id"
+              >
+                <option value="">No city assignment yet</option>
+                <option
+                  v-for="city in getTripCities(saveForms[place.id].trip_id)"
+                  :key="city.id"
+                  :value="city.id"
+                >
+                  {{ city.sort_order + 1 }}. {{ city.name }}
                 </option>
               </select>
               <select v-model="saveForms[place.id].status">
@@ -237,6 +250,7 @@ watch(
       if (!saveForms[place.id]) {
         saveForms[place.id] = {
           trip_id: selectedTripId.value || tripsStore.activeTripId || '',
+          city_id: '',
           status: 'want_to_visit',
           notes: '',
           feedback: '',
@@ -254,6 +268,9 @@ watch(
     for (const form of Object.values(saveForms)) {
       if (!form.trip_id) {
         form.trip_id = tripId || ''
+      }
+      if (!form.trip_id) {
+        form.city_id = ''
       }
     }
   }
@@ -276,8 +293,23 @@ watch(selectedTripId, (tripId) => {
     if (!form.trip_id) {
       form.trip_id = tripId || ''
     }
+    if (!form.trip_id) {
+      form.city_id = ''
+    }
   }
 })
+
+function getTripCities(tripId) {
+  return trips.value.find((trip) => trip.id === tripId)?.cities || []
+}
+
+function onSaveScopeChange(placeId) {
+  const form = saveForms[placeId]
+  const validCityIds = new Set(getTripCities(form.trip_id).map((city) => city.id))
+  if (!validCityIds.has(form.city_id)) {
+    form.city_id = ''
+  }
+}
 
 function getDisplayTags(place) {
   const tags = place.tags || {}
@@ -503,7 +535,16 @@ async function onSavePlace(place) {
   const form = saveForms[place.id]
   form.feedback = 'Saving...'
   try {
-    await savedStore.savePlace(place.id, form.status, form.notes || null, form.trip_id || null)
+    await savedStore.savePlace(
+      place.id,
+      form.status,
+      form.notes || null,
+      form.trip_id || null,
+      form.trip_id ? (form.city_id || null) : null
+    )
+    if (form.trip_id && tripsStore.activeTripId === form.trip_id) {
+      await tripsStore.fetchTripOverview(form.trip_id)
+    }
     form.feedback = form.trip_id ? 'Saved to trip shortlist' : 'Saved to global shortlist'
     form.notes = ''
   } catch {

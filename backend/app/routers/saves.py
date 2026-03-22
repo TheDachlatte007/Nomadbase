@@ -5,6 +5,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.models.city import City
 from app.models.place import Place
 from app.models.saved_place import SavedPlace
 from app.models.trip import Trip
@@ -35,9 +36,11 @@ def _saved_place_select():
         Place.source,
         Place.tags,
         Trip.name.label("trip_name"),
+        City.id.label("city_uuid"),
+        City.name.label("city_name"),
         func.ST_Y(Place.location).label("lat"),
         func.ST_X(Place.location).label("lon"),
-    ).join(Place, Place.id == SavedPlace.place_id).outerjoin(Trip, Trip.id == SavedPlace.trip_id)
+    ).join(Place, Place.id == SavedPlace.place_id).outerjoin(Trip, Trip.id == SavedPlace.trip_id).outerjoin(City, City.id == SavedPlace.city_id)
 
 
 def _serialize_saved_place(row) -> dict:
@@ -46,6 +49,8 @@ def _serialize_saved_place(row) -> dict:
         "place_id": str(row.place_id),
         "trip_id": str(row.trip_id) if row.trip_id else None,
         "trip_name": row.trip_name,
+        "city_id": str(row.city_uuid) if row.city_uuid else None,
+        "city_name": row.city_name,
         "status": row.status,
         "notes": row.notes,
         "created_at": row.created_at,
@@ -79,6 +84,15 @@ async def _require_trip(db: AsyncSession, trip_id: UUID) -> Trip:
     if trip is None:
         raise HTTPException(status_code=404, detail="Trip not found")
     return trip
+
+
+async def _require_city_for_trip(
+    db: AsyncSession, city_id: UUID, trip_id: UUID
+) -> City:
+    city = await db.get(City, city_id)
+    if city is None or city.trip_id != trip_id:
+        raise HTTPException(status_code=404, detail="City not found for this trip")
+    return city
 
 
 async def _ensure_unique_scope(
@@ -132,12 +146,20 @@ async def save_place(
 ):
     place_uuid = _parse_uuid(payload.place_id, "place_id")
     trip_uuid = _parse_uuid(payload.trip_id, "trip_id") if payload.trip_id else None
+    city_uuid = _parse_uuid(payload.city_id, "city_id") if payload.city_id else None
 
     place = await db.get(Place, place_uuid)
     if place is None:
         raise HTTPException(status_code=404, detail="Place not found")
     if trip_uuid:
         await _require_trip(db, trip_uuid)
+    if city_uuid:
+        if trip_uuid is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="city_id requires a trip-scoped save",
+            )
+        await _require_city_for_trip(db, city_uuid, trip_uuid)
 
     existing = await db.execute(
         select(SavedPlace).where(
@@ -152,12 +174,14 @@ async def save_place(
         saved_place = SavedPlace(
             place_id=place_uuid,
             trip_id=trip_uuid,
+            city_id=city_uuid,
             status=payload.status,
             notes=payload.notes,
         )
         db.add(saved_place)
     else:
         saved_place.trip_id = trip_uuid
+        saved_place.city_id = city_uuid
         saved_place.status = payload.status
         saved_place.notes = payload.notes
 
@@ -182,7 +206,10 @@ async def update_saved_place(
     if saved_place is None:
         raise HTTPException(status_code=404, detail="Saved place not found")
 
-    if payload.trip_id is not None:
+    trip_id_in_payload = "trip_id" in payload.model_fields_set
+    city_id_in_payload = "city_id" in payload.model_fields_set
+
+    if trip_id_in_payload:
         trip_uuid = _parse_uuid(payload.trip_id, "trip_id") if payload.trip_id else None
         if trip_uuid:
             await _require_trip(db, trip_uuid)
@@ -193,6 +220,21 @@ async def update_saved_place(
             ignore_saved_id=saved_place.id,
         )
         saved_place.trip_id = trip_uuid
+        if not city_id_in_payload:
+            saved_place.city_id = None
+    else:
+        trip_uuid = saved_place.trip_id
+
+    if city_id_in_payload:
+        city_uuid = _parse_uuid(payload.city_id, "city_id") if payload.city_id else None
+        if city_uuid is not None:
+            if trip_uuid is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="city_id requires a trip-scoped save",
+                )
+            await _require_city_for_trip(db, city_uuid, trip_uuid)
+        saved_place.city_id = city_uuid
     if payload.status is not None:
         saved_place.status = payload.status
     if payload.notes is not None:

@@ -20,6 +20,10 @@ class TripCityCreateRequest(BaseModel):
     lon: float | None = None
 
 
+class TripCityReorderRequest(BaseModel):
+    city_ids: list[str] = Field(min_length=1)
+
+
 class TripParticipantCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     note: str | None = Field(default=None, max_length=1000)
@@ -38,6 +42,7 @@ class TripCityResponse(BaseModel):
     country: str | None = None
     lat: float | None = None
     lon: float | None = None
+    sort_order: int
     created_at: datetime
     updated_at: datetime | None = None
 
@@ -60,6 +65,47 @@ class TripResponse(BaseModel):
     updated_at: datetime | None = None
     cities: list[TripCityResponse]
     participants: list[TripParticipantResponse]
+
+
+class TripOverviewCityResponse(BaseModel):
+    id: str
+    name: str
+    country: str | None = None
+    sort_order: int
+    lat: float | None = None
+    lon: float | None = None
+    saved_count: int
+    want_to_visit_count: int
+    visited_count: int
+    favorite_count: int
+    place_type_counts: dict[str, int]
+    preview_places: list[str]
+    places: list["TripOverviewPlaceResponse"]
+
+
+class TripOverviewPlaceResponse(BaseModel):
+    saved_place_id: str
+    place_id: str
+    name: str
+    place_type: str
+    status: str
+    notes: str | None = None
+    lat: float
+    lon: float
+    city_id: str | None = None
+    city_name: str | None = None
+
+
+class TripOverviewResponse(BaseModel):
+    trip_id: str
+    trip_name: str
+    participant_count: int
+    city_count: int
+    total_saved_places: int
+    assigned_saved_places: int
+    unassigned_saved_places: int
+    cities: list[TripOverviewCityResponse]
+    unassigned_places: list[TripOverviewPlaceResponse]
 
 
 class TripListResponse(BaseModel):

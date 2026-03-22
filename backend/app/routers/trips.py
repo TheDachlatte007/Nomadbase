@@ -9,12 +9,16 @@ from app.db import get_db
 from app.models.city import City
 from app.models.expense import Expense
 from app.models.expense_split import ExpenseSplit
+from app.models.place import Place
+from app.models.saved_place import SavedPlace
 from app.models.trip import Trip
 from app.models.trip_participant import TripParticipant
 from app.schemas.trip import (
     TripCityCreateRequest,
+    TripCityReorderRequest,
     TripCreateRequest,
     TripListResponse,
+    TripOverviewResponse,
     TripParticipantCreateRequest,
     TripResponse,
     TripUpdateRequest,
@@ -82,9 +86,10 @@ async def _load_trip_payloads(
                 City.updated_at,
                 func.ST_Y(City.location).label("lat"),
                 func.ST_X(City.location).label("lon"),
+                City.sort_order,
             )
             .where(City.trip_id.in_(ordered_trip_ids))
-            .order_by(City.created_at.asc(), City.name.asc())
+            .order_by(City.sort_order.asc(), City.created_at.asc(), City.name.asc())
         )
     ).all()
     for row in city_rows:
@@ -95,6 +100,7 @@ async def _load_trip_payloads(
                 "country": row.country,
                 "lat": float(row.lat) if row.lat is not None else None,
                 "lon": float(row.lon) if row.lon is not None else None,
+                "sort_order": row.sort_order,
                 "created_at": row.created_at,
                 "updated_at": row.updated_at,
             }
@@ -158,6 +164,132 @@ async def create_trip(payload: TripCreateRequest, db: AsyncSession = Depends(get
     return TripResponse(**await _load_trip_payload(db, trip.id))
 
 
+async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
+    trip = await db.get(Trip, trip_id)
+    if trip is None:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    city_rows = (
+        await db.execute(
+            select(
+                City.id,
+                City.name,
+                City.country,
+                City.sort_order,
+                func.ST_Y(City.location).label("lat"),
+                func.ST_X(City.location).label("lon"),
+            )
+            .where(City.trip_id == trip_id)
+            .order_by(City.sort_order.asc(), City.created_at.asc(), City.name.asc())
+        )
+    ).all()
+
+    city_map = {
+        row.id: {
+            "id": str(row.id),
+            "name": row.name,
+            "country": row.country,
+            "sort_order": row.sort_order,
+            "lat": float(row.lat) if row.lat is not None else None,
+            "lon": float(row.lon) if row.lon is not None else None,
+            "saved_count": 0,
+            "want_to_visit_count": 0,
+            "visited_count": 0,
+            "favorite_count": 0,
+            "place_type_counts": {},
+            "preview_places": [],
+            "places": [],
+        }
+        for row in city_rows
+    }
+
+    participant_count = (
+        await db.scalar(
+            select(func.count())
+            .select_from(TripParticipant)
+            .where(TripParticipant.trip_id == trip_id)
+        )
+        or 0
+    )
+
+    saved_rows = (
+        await db.execute(
+            select(
+                SavedPlace.id.label("saved_place_id"),
+                SavedPlace.place_id,
+                SavedPlace.city_id,
+                SavedPlace.status,
+                SavedPlace.notes,
+                Place.place_type,
+                Place.name,
+                func.ST_Y(Place.location).label("lat"),
+                func.ST_X(Place.location).label("lon"),
+            )
+            .join(Place, Place.id == SavedPlace.place_id)
+            .where(SavedPlace.trip_id == trip_id)
+            .order_by(SavedPlace.created_at.desc())
+        )
+    ).all()
+
+    total_saved_places = len(saved_rows)
+    assigned_saved_places = 0
+    unassigned_saved_places = 0
+    unassigned_places: list[dict] = []
+
+    for row in saved_rows:
+        place_payload = {
+            "saved_place_id": str(row.saved_place_id),
+            "place_id": str(row.place_id),
+            "name": row.name,
+            "place_type": row.place_type,
+            "status": row.status,
+            "notes": row.notes,
+            "lat": float(row.lat),
+            "lon": float(row.lon),
+            "city_id": str(row.city_id) if row.city_id else None,
+            "city_name": city_map[row.city_id]["name"]
+            if row.city_id and row.city_id in city_map
+            else None,
+        }
+        if row.city_id is None or row.city_id not in city_map:
+            unassigned_saved_places += 1
+            unassigned_places.append(place_payload)
+            continue
+
+        assigned_saved_places += 1
+        city_entry = city_map[row.city_id]
+        city_entry["saved_count"] += 1
+        if row.status == "want_to_visit":
+            city_entry["want_to_visit_count"] += 1
+        elif row.status == "visited":
+            city_entry["visited_count"] += 1
+        elif row.status == "favorite":
+            city_entry["favorite_count"] += 1
+
+        if row.place_type:
+            city_entry["place_type_counts"][row.place_type] = (
+                city_entry["place_type_counts"].get(row.place_type, 0) + 1
+            )
+        if row.name and row.name not in city_entry["preview_places"]:
+            city_entry["preview_places"].append(row.name)
+        city_entry["places"].append(place_payload)
+
+    for city_entry in city_map.values():
+        city_entry["preview_places"] = city_entry["preview_places"][:3]
+
+    return {
+        "trip_id": str(trip.id),
+        "trip_name": trip.name,
+        "participant_count": participant_count,
+        "city_count": len(city_rows),
+        "total_saved_places": total_saved_places,
+        "assigned_saved_places": assigned_saved_places,
+        "unassigned_saved_places": unassigned_saved_places,
+        "cities": [city_map[row.id] for row in city_rows],
+        "unassigned_places": unassigned_places,
+    }
+
+
 @router.patch("/{trip_id}", response_model=TripResponse)
 async def update_trip(
     trip_id: str,
@@ -210,11 +342,21 @@ async def add_city_to_trip(
     if payload.lat is not None and payload.lon is not None:
         location = WKTElement(f"POINT({payload.lon} {payload.lat})", srid=4326)
 
+    next_sort_order = (
+        await db.scalar(
+            select(func.coalesce(func.max(City.sort_order), -1) + 1).where(
+                City.trip_id == trip_uuid
+            )
+        )
+        or 0
+    )
+
     city = City(
         trip_id=trip_uuid,
         name=payload.name,
         country=payload.country,
         location=location,
+        sort_order=next_sort_order,
     )
     db.add(city)
     await db.commit()
@@ -234,6 +376,47 @@ async def remove_city_from_trip(
         raise HTTPException(status_code=404, detail="City not found")
     await db.delete(city)
     await db.commit()
+
+    remaining = (
+        await db.execute(
+            select(City)
+            .where(City.trip_id == trip_uuid)
+            .order_by(City.sort_order.asc(), City.created_at.asc(), City.name.asc())
+        )
+    ).scalars().all()
+    for index, remaining_city in enumerate(remaining):
+        remaining_city.sort_order = index
+    await db.commit()
+
+
+@router.post("/{trip_id}/cities/reorder", response_model=TripResponse)
+async def reorder_trip_cities(
+    trip_id: str,
+    payload: TripCityReorderRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    trip_uuid = _parse_uuid(trip_id, "trip_id")
+    trip = await db.get(Trip, trip_uuid)
+    if trip is None:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    city_ids = [_parse_uuid(city_id, "city_id") for city_id in payload.city_ids]
+    cities = (
+        await db.execute(select(City).where(City.trip_id == trip_uuid))
+    ).scalars().all()
+    existing_ids = {city.id for city in cities}
+    if set(city_ids) != existing_ids or len(city_ids) != len(existing_ids):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="city_ids must contain each trip city exactly once",
+        )
+
+    city_by_id = {city.id: city for city in cities}
+    for index, city_uuid in enumerate(city_ids):
+        city_by_id[city_uuid].sort_order = index
+
+    await db.commit()
+    return TripResponse(**await _load_trip_payload(db, trip_uuid))
 
 
 @router.post(
@@ -293,3 +476,12 @@ async def remove_trip_participant(
 
     await db.delete(participant)
     await db.commit()
+
+
+@router.get("/{trip_id}/overview", response_model=TripOverviewResponse)
+async def get_trip_overview(
+    trip_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    trip_uuid = _parse_uuid(trip_id, "trip_id")
+    return TripOverviewResponse(**await _load_trip_overview_payload(db, trip_uuid))
