@@ -11,6 +11,7 @@ export const usePlacesStore = defineStore('places', () => {
   const hasMore = ref(false)
   const isOffline = ref(!navigator.onLine)
   const cacheSource = ref(null) // non-null when loaded from cache
+  const message = ref('')
 
   // Track current query params so "load more" can continue with same filters
   let _lastQuery = ''
@@ -57,6 +58,7 @@ export const usePlacesStore = defineStore('places', () => {
       places.value = payload.data || []
       totalAvailable.value = payload.total_available ?? payload.total
       hasMore.value = places.value.length < totalAvailable.value
+      message.value = payload.message || ''
       isOffline.value = false
 
       // Persist to IndexedDB (best-effort, non-blocking)
@@ -72,6 +74,7 @@ export const usePlacesStore = defineStore('places', () => {
         totalAvailable.value = cached.totalAvailable
         hasMore.value = false // no pagination when offline
         cacheSource.value = cacheKey
+        message.value = 'Showing cached places for this filter.'
       } else {
         // Try "all" as a broader fallback
         const fallback = await getCache('all').catch(() => null)
@@ -80,10 +83,12 @@ export const usePlacesStore = defineStore('places', () => {
           totalAvailable.value = fallback.totalAvailable
           hasMore.value = false
           cacheSource.value = 'all'
+          message.value = 'Showing cached places from a broader fallback.'
         } else {
           places.value = []
           totalAvailable.value = 0
           hasMore.value = false
+          message.value = 'No cached places available.'
         }
       }
     } finally {
@@ -110,6 +115,7 @@ export const usePlacesStore = defineStore('places', () => {
       places.value = [...places.value, ...(payload.data || [])]
       totalAvailable.value = payload.total_available ?? payload.total
       hasMore.value = places.value.length < totalAvailable.value
+      message.value = payload.message || message.value
     } finally {
       loading.value = false
     }
@@ -127,6 +133,7 @@ export const usePlacesStore = defineStore('places', () => {
       const payload = await res.json()
       places.value = payload.data || []
       totalAvailable.value = places.value.length
+      message.value = payload.message || 'Nearby places'
       isOffline.value = false
       return places.value
     } finally {
@@ -141,6 +148,7 @@ export const usePlacesStore = defineStore('places', () => {
     hasMore,
     isOffline,
     cacheSource,
+    message,
     fetchPlaces,
     loadMore,
     fetchNearby,

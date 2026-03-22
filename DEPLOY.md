@@ -40,6 +40,23 @@ Open:
 The homepage should be served directly by the FastAPI app container.
 The map tab should render alpha sample places right away after a healthy first boot.
 
+## Quick smoke check
+
+After deploy, you can run:
+
+```powershell
+python scripts/smoke_check.py http://YOUR-HOST:PORT
+```
+
+This checks the homepage plus the core alpha endpoints:
+
+- `/`
+- `/api/health`
+- `/api/map/places?limit=1`
+- `/api/trips/`
+- `/api/saves/`
+- `/api/docs`
+
 ## Known limitations
 
 - The project still needs real deployment verification because Docker was not runnable in this IDE session.

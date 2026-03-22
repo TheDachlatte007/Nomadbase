@@ -291,6 +291,12 @@ code {
   gap: 8px;
 }
 
+.place-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -310,6 +316,17 @@ code {
 .save-form {
   display: grid;
   gap: 10px;
+}
+
+.fact-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.28rem 0.68rem;
+  background: rgba(31, 43, 42, 0.06);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .place-actions {

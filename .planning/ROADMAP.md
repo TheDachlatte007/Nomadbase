@@ -53,7 +53,7 @@ The repository already contains a partial backend scaffold for 01-01, but there 
 **Plans**: TBD
 
 Current reality note:
-The repo now contains a working alpha data flow for `places` and `saves`, including seeded sample places, server-side filtering, and note/status persistence. The missing pieces are the actual interactive map surface and lifestyle-filter UI.
+The repo now contains a working alpha data flow for `places` and `saves`, including seeded sample places, stronger server-side ranking for intent queries, and note/status persistence. The missing pieces are the eventual MapLibre surface and deeper enrichment/import depth.
 
 ### Phase 3: Trips
 **Goal**: Users can organize their journey into named trips with cities and planned places, viewable as both a map and a list

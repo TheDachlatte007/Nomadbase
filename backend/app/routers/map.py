@@ -4,7 +4,7 @@ from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Text, and_, case, cast, func, or_, select
+from sqlalchemy import Text, and_, case, cast, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -160,6 +160,38 @@ def _build_context_line(
     return " · ".join(parts[:2]) if parts else None
 
 
+def _collect_facts(
+    place_type: str, tags: dict | None, raw_tags: dict | None, address: str | None
+) -> list[str]:
+    tags = tags or {}
+    raw_tags = raw_tags or {}
+    facts: list[str] = []
+
+    if address:
+        facts.append(address)
+    opening_hours = raw_tags.get("opening_hours")
+    if opening_hours:
+        facts.append(f"Hours: {opening_hours}")
+    operator = raw_tags.get("operator")
+    if operator:
+        facts.append(f"Operator: {operator}")
+    if tags.get("cuisine"):
+        facts.append(f"Cuisine: {tags['cuisine'].replace(';', ', ').replace('_', ' ')}")
+    if raw_tags.get("brand"):
+        facts.append(f"Brand: {raw_tags['brand']}")
+    if tags.get("diet:vegan") in {"yes", "only", "limited"}:
+        facts.append("Vegan options")
+    if tags.get("diet:vegetarian") in {"yes", "only", "limited"}:
+        facts.append("Vegetarian options")
+    if tags.get("internet_access") in {"wlan", "yes"}:
+        facts.append("WiFi")
+    if tags.get("outdoor_seating") == "yes":
+        facts.append("Outdoor seating")
+    if raw_tags.get("heritage") and place_type == "cultural":
+        facts.append("Heritage site")
+    return facts[:4]
+
+
 def _fallback_description(
     description: str | None,
     place_type: str,
@@ -204,6 +236,7 @@ def _serialize_place(row) -> dict:
         or raw_tags.get("url"),
         "wikipedia_url": _parse_wikipedia_url(raw_tags),
         "wikidata_id": raw_tags.get("wikidata"),
+        "facts": _collect_facts(row.place_type, row.tags or {}, raw_tags, address),
         "lat": float(row.lat),
         "lon": float(row.lon),
     }
@@ -214,17 +247,23 @@ def _parse_search_context(
     q: str | None,
     place_type: str | None,
     tag_filters: str | None,
-) -> tuple[str | None, list[str], list[str]]:
+) -> tuple[str | None, list[str], list[str], list[str]]:
     inferred_place_type = place_type
     inferred_tag_filters = {
         value.strip()
         for value in (tag_filters or "").split(",")
         if value.strip()
     }
+    soft_tag_terms: list[str] = []
     free_text_terms: list[str] = []
 
     if not q:
-        return inferred_place_type, sorted(inferred_tag_filters), free_text_terms
+        return (
+            inferred_place_type,
+            sorted(inferred_tag_filters),
+            soft_tag_terms,
+            free_text_terms,
+        )
 
     raw_terms = [
         token for token in re.split(r"[^a-z0-9:+-]+", q.lower()) if token
@@ -238,15 +277,19 @@ def _parse_search_context(
             if inferred_place_type == mapped_place_type:
                 continue
         if term in _TAG_TERM_MAP:
-            # Search terms like "vegan" should broaden discovery, not silently
-            # collapse the result set into strict OSM metadata filters.
-            free_text_terms.append(term)
+            # Treat lifestyle words as soft intent signals for ranking.
+            soft_tag_terms.append(term)
             continue
         if term in _STOP_WORDS:
             continue
         free_text_terms.append(term)
 
-    return inferred_place_type, sorted(inferred_tag_filters), free_text_terms
+    return (
+        inferred_place_type,
+        sorted(inferred_tag_filters),
+        soft_tag_terms,
+        free_text_terms,
+    )
 
 
 def _tag_predicate(tag_key: str):
@@ -284,6 +327,13 @@ def _tag_predicate(tag_key: str):
     return None
 
 
+def _tag_score(tag_key: str):
+    predicate = _tag_predicate(tag_key)
+    if predicate is None:
+        return literal(0)
+    return case((predicate, 60), else_=0)
+
+
 @router.get("/places", response_model=PlaceListResponse)
 async def list_places(
     place_type: str | None = None,
@@ -295,11 +345,17 @@ async def list_places(
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    effective_place_type, effective_tag_filters, free_text_terms = _parse_search_context(
+    (
+        effective_place_type,
+        effective_tag_filters,
+        soft_tag_terms,
+        free_text_terms,
+    ) = _parse_search_context(
         q, place_type, tag_filters
     )
 
     filters = []
+    trip_city_rows = []
     if effective_place_type:
         filters.append(Place.place_type == effective_place_type)
     if region:
@@ -354,73 +410,52 @@ async def list_places(
         count_stmt = count_stmt.where(and_(*filters))
     total_available = (await db.execute(count_stmt)).scalar_one()
 
-    order_clause = []
-    if free_text_terms:
-        first_term = free_text_terms[0]
-        order_clause.append(
-            case(
-                (Place.region.ilike(f"%{first_term}%"), 0),
-                (Place.name.ilike(f"{first_term}%"), 1),
-                else_=2,
-            )
+    score = literal(0)
+    normalized_query = q.strip().lower() if q else None
+
+    if normalized_query:
+        score = score + case((func.lower(Place.name) == normalized_query, 240), else_=0)
+        score = score + case((Place.name.ilike(f"{q.strip()}%"), 140), else_=0)
+        score = score + case((Place.region.ilike(f"%{q.strip()}%"), 110), else_=0)
+
+    if region:
+        score = score + case((func.lower(Place.region) == region.strip().lower(), 160), else_=0)
+        score = score + case((Place.region.ilike(f"{region.strip()}%"), 80), else_=0)
+
+    for term in free_text_terms:
+        pattern = f"%{term}%"
+        score = score + case((Place.region.ilike(pattern), 75), else_=0)
+        score = score + case((Place.name.ilike(pattern), 60), else_=0)
+        score = score + case((Place.description.ilike(pattern), 30), else_=0)
+        score = score + case((cast(Place.tags, Text).ilike(pattern), 20), else_=0)
+        score = score + case((cast(Place.raw_osm_tags, Text).ilike(pattern), 18), else_=0)
+
+    all_tag_terms = sorted(set(effective_tag_filters + soft_tag_terms))
+    for tag_term in all_tag_terms:
+        mapped_tag_key = _TAG_TERM_MAP.get(tag_term, tag_term)
+        score = score + _tag_score(mapped_tag_key)
+        score = score + case(
+            (cast(Place.raw_osm_tags, Text).ilike(f"%{tag_term}%"), 18),
+            else_=0,
         )
-    elif q:
-        normalized_q = q.strip().lower()
-        order_clause.append(
-            case(
-                (func.lower(Place.name) == normalized_q, 0),
-                (Place.name.ilike(f"{q.strip()}%"), 1),
-                else_=2,
-            )
+        score = score + case(
+            (cast(Place.tags, Text).ilike(f"%{tag_term}%"), 22),
+            else_=0,
         )
 
-    if "vegan" in effective_tag_filters:
-        order_clause.append(
-            case(
-                (
-                    Place.tags.contains(cast(json.dumps({"diet:vegan": "only"}), JSONB)),
-                    0,
-                ),
-                (
-                    Place.tags.contains(cast(json.dumps({"diet:vegan": "yes"}), JSONB)),
-                    1,
-                ),
-                (
-                    Place.tags.contains(
-                        cast(json.dumps({"diet:vegan": "limited"}), JSONB)
-                    ),
-                    2,
-                ),
-                else_=3,
-            )
-        )
+    if effective_place_type:
+        score = score + case((Place.place_type == effective_place_type, 90), else_=0)
 
-    if "vegetarian" in effective_tag_filters:
-        order_clause.append(
-            case(
-                (
-                    Place.tags.contains(
-                        cast(json.dumps({"diet:vegetarian": "only"}), JSONB)
-                    ),
-                    0,
-                ),
-                (
-                    Place.tags.contains(
-                        cast(json.dumps({"diet:vegetarian": "yes"}), JSONB)
-                    ),
-                    1,
-                ),
-                (
-                    Place.tags.contains(
-                        cast(json.dumps({"diet:vegetarian": "limited"}), JSONB)
-                    ),
-                    2,
-                ),
-                else_=3,
+    for row in trip_city_rows:
+        if row.name:
+            score = score + case((Place.region.ilike(f"%{row.name.strip()}%"), 36), else_=0)
+        if row.name and row.country:
+            score = score + case(
+                (Place.region.ilike(f"%{row.name.strip()}%{row.country.strip()}%"), 28),
+                else_=0,
             )
-        )
 
-    order_clause.extend([Place.name.asc(), Place.region.asc()])
+    order_clause = [score.desc(), Place.name.asc(), Place.region.asc()]
 
     stmt = _base_place_select().order_by(*order_clause).limit(limit).offset(offset)
     if filters:
@@ -429,7 +464,20 @@ async def list_places(
     result = await db.execute(stmt)
     rows = result.all()
     data = [_serialize_place(row) for row in rows]
-    message = "Live alpha places" if data else "No places found for current filters"
+    summary_bits = []
+    if effective_place_type:
+        summary_bits.append(effective_place_type)
+    if soft_tag_terms:
+        summary_bits.extend(sorted(set(soft_tag_terms)))
+    if free_text_terms:
+        summary_bits.extend(free_text_terms)
+    if region:
+        summary_bits.append(region.strip())
+    message = (
+        f"Ranked for {' · '.join(summary_bits)}"
+        if data and summary_bits
+        else ("Live alpha places" if data else "No places found for current filters")
+    )
 
     return PlaceListResponse(data=data, total=len(data), total_available=total_available, message=message)
 

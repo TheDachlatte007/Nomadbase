@@ -33,6 +33,12 @@ NomadBase should become a trip-scoped travel database first:
 - Add better ranking for exact region matches and diet tags.
 - Improve place cards so imported OSM metadata is surfaced more clearly.
 
+Status:
+- Done in alpha-plus form.
+- Search now treats words like `vegan` and `vegetarian` as soft intent signals instead of hard text filters.
+- Region matches and city-context matches are ranked more strongly.
+- Place cards now expose more useful imported facts directly in the UI.
+
 ### Phase 2: Trip-scoped saves
 - Done in alpha.
 - Saved places can live globally or inside one trip.
@@ -69,10 +75,10 @@ NomadBase should become a trip-scoped travel database first:
 
 ## Next Recommended Build Order
 
-1. Search v1.2 with stronger ranking for intent + region matching.
-2. Import pipeline v1 so admin actions become real ingestion jobs instead of informational UI.
-3. Trip planner follow-up: city highlights, city notes, and smarter unassigned-save suggestions.
-4. Smoke-test scripts for deploy verification after each Portainer rollout.
+1. Import pipeline v1 so admin actions become real ingestion jobs instead of informational UI.
+2. Trip planner follow-up: city highlights, city notes, and smarter unassigned-save suggestions.
+3. Smoke-test scripts can be extended with richer deployment assertions after each Portainer rollout.
+4. Optional live enrichment for weakly-described places via Wikipedia / Wikidata style context.
 
 ## Constraints
 

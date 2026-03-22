@@ -72,6 +72,7 @@
           Search for things like <code>vegan restaurant toronto</code>.
           The vegan chip is a strict OSM metadata filter.
         </p>
+        <p v-if="resultMessage" class="muted map-helper">{{ resultMessage }}</p>
       </div>
 
       <div ref="mapEl" id="map-view"></div>
@@ -110,6 +111,10 @@
             </p>
           </div>
           <p>{{ place.description || 'No description yet.' }}</p>
+
+          <div v-if="place.facts?.length" class="place-facts">
+            <span v-for="fact in place.facts" :key="fact" class="fact-pill">{{ fact }}</span>
+          </div>
 
           <div class="chip-row">
             <span class="chip">{{ place.place_type }}</span>
@@ -195,6 +200,7 @@ const places = computed(() => placesStore.places)
 const loading = computed(() => placesStore.loading)
 const hasMore = computed(() => placesStore.hasMore)
 const totalAvailable = computed(() => placesStore.totalAvailable)
+const resultMessage = computed(() => placesStore.message)
 const trips = computed(() => tripsStore.trips)
 const activeTrip = computed(() => tripsStore.activeTrip)
 const importedRegions = computed(() => {

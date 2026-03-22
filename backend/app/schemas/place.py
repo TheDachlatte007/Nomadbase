@@ -15,6 +15,7 @@ class PlaceSummary(BaseModel):
     website_url: str | None = None
     wikipedia_url: str | None = None
     wikidata_id: str | None = None
+    facts: list[str] = []
     lat: float
     lon: float
 
