@@ -94,7 +94,7 @@ The alpha now supports expense creation, visit logging, recent activity lists, a
 **Plans**: TBD
 
 Current reality note:
-Preferences, import inventory, and system metrics are exposed in the API and frontend alpha. Real import jobs and scheduled update visibility still need to be implemented.
+Preferences, import inventory, system metrics, and recent import job history are now exposed in the API and frontend alpha. Imports are still synchronous request-time actions, so background execution and scheduled update visibility remain future work.
 
 ## Progress
 

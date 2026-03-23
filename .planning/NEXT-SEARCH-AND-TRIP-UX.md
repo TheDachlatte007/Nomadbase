@@ -75,8 +75,8 @@ Status:
 
 ## Next Recommended Build Order
 
-1. Import pipeline v1 so admin actions become real ingestion jobs instead of informational UI.
-2. Trip planner follow-up: city highlights, city notes, and smarter unassigned-save suggestions.
+1. Trip planner follow-up: city highlights, city notes, and smarter unassigned-save suggestions.
+2. Import pipeline follow-up: background execution, retries, and maybe queueing if sync imports become painful.
 3. Smoke-test scripts can be extended with richer deployment assertions after each Portainer rollout.
 4. Optional live enrichment for weakly-described places via Wikipedia / Wikidata style context.
 

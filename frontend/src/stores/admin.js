@@ -5,6 +5,7 @@ export const useAdminStore = defineStore('admin', () => {
   const health = ref('checking')
   const systemStatus = ref(null)
   const imports = ref([])
+  const importJobs = ref([])
   const preferences = ref({
     interests: [],
     dietary_filters: [],
@@ -32,6 +33,13 @@ export const useAdminStore = defineStore('admin', () => {
     if (!res.ok) return
     const payload = await res.json()
     imports.value = payload.data || []
+  }
+
+  async function fetchImportJobs() {
+    const res = await fetch('/api/admin/import-jobs')
+    if (!res.ok) return
+    const payload = await res.json()
+    importJobs.value = payload.data || []
   }
 
   async function fetchPreferences() {
@@ -62,7 +70,7 @@ export const useAdminStore = defineStore('admin', () => {
       throw new Error(err.detail || 'Import failed')
     }
     const result = await res.json()
-    await Promise.all([fetchImports(), fetchStatus()])
+    await Promise.all([fetchImports(), fetchImportJobs(), fetchStatus()])
     return result
   }
 
@@ -70,10 +78,12 @@ export const useAdminStore = defineStore('admin', () => {
     health,
     systemStatus,
     imports,
+    importJobs,
     preferences,
     checkHealth,
     fetchStatus,
     fetchImports,
+    fetchImportJobs,
     fetchPreferences,
     savePreferences,
     importCity,

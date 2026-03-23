@@ -1,5 +1,6 @@
 from app.schemas.health import HealthResponse
 from app.schemas.admin import (
+    ImportJobListResponse,
     ImportStatusResponse,
     PreferencesResponse,
     PreferencePayload,
@@ -39,6 +40,7 @@ from app.schemas.tracking import (
 
 __all__ = [
     "HealthResponse",
+    "ImportJobListResponse",
     "ImportStatusResponse",
     "ExpenseCreateRequest",
     "ExpenseListResponse",

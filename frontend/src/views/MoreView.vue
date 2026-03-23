@@ -80,11 +80,37 @@
         <div v-for="item in imports" :key="item.region" class="import-item">
           <div>
             <strong>{{ item.region }}</strong>
-            <p class="muted">{{ item.place_count }} places</p>
+            <p class="muted">
+              {{ item.place_count }} places
+              <span v-if="item.last_imported_at">· last import {{ formatTimestamp(item.last_imported_at) }}</span>
+            </p>
           </div>
           <div class="chip-row">
             <span v-for="source in item.sources" :key="source" class="chip">{{ source }}</span>
           </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="info-card wide-card">
+      <p class="card-eyebrow">Recent import jobs</p>
+      <h3>See which import runs finished cleanly and which need another try.</h3>
+      <div class="imports-list">
+        <p v-if="!importJobs.length" class="empty-state">No import jobs recorded yet.</p>
+        <div v-for="job in importJobs" :key="job.id" class="import-item">
+          <div>
+            <strong>{{ job.region || job.city }}<span v-if="job.country">, {{ job.country }}</span></strong>
+            <p class="muted">
+              {{ formatTimestamp(job.created_at) }}
+              <span v-if="job.finished_at">→ {{ formatTimestamp(job.finished_at) }}</span>
+            </p>
+          </div>
+          <div class="chip-row">
+            <span class="chip" :class="{ 'chip--tag': job.status === 'failed' }">{{ job.status }}</span>
+            <span class="chip">{{ job.imported_count }} imported</span>
+            <span class="chip">{{ job.total_elements }} raw elements</span>
+          </div>
+          <p v-if="job.error" class="muted">{{ job.error }}</p>
         </div>
       </div>
     </article>
@@ -98,6 +124,7 @@ import { listCacheEntries, deleteCache } from '../utils/offlineDb.js'
 
 const adminStore = useAdminStore()
 const imports = computed(() => adminStore.imports)
+const importJobs = computed(() => adminStore.importJobs)
 const systemStatus = computed(() => adminStore.systemStatus)
 
 const statusText = computed(() => {
@@ -157,6 +184,11 @@ function formatAge(ts) {
   return `${Math.round(hrs / 24)}d ago`
 }
 
+function formatTimestamp(value) {
+  if (!value) return 'n/a'
+  return new Date(value).toLocaleString()
+}
+
 async function loadCacheEntries() {
   cacheLoading.value = true
   try {
@@ -174,7 +206,10 @@ async function onDeleteCache(key) {
   await loadCacheEntries()
 }
 
-onMounted(loadCacheEntries)
+onMounted(() => {
+  loadCacheEntries().catch(() => {})
+  adminStore.fetchImportJobs().catch(() => {})
+})
 
 // Import
 const importForm = reactive({ city: '', country: '' })

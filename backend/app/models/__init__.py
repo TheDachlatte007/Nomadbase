@@ -8,6 +8,7 @@ from app.models.expense_split import ExpenseSplit
 from app.models.visit import Visit
 from app.models.preference import UserPreference
 from app.models.trip_participant import TripParticipant
+from app.models.import_job import ImportJob
 
 __all__ = [
     "Base",
@@ -20,4 +21,5 @@ __all__ = [
     "Visit",
     "UserPreference",
     "TripParticipant",
+    "ImportJob",
 ]

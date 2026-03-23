@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -6,12 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import check_db, get_db
 from app.models.expense import Expense
+from app.models.import_job import ImportJob
 from app.models.place import Place
 from app.models.preference import UserPreference
 from app.models.saved_place import SavedPlace
 from app.models.trip import Trip
 from app.models.visit import Visit
 from app.schemas.admin import (
+    ImportJobListResponse,
     ImportRequest,
     ImportResult,
     ImportStatusResponse,
@@ -53,14 +57,28 @@ async def system_status(db: AsyncSession = Depends(get_db)):
 
 @router.get("/imports", response_model=ImportStatusResponse)
 async def list_imports(db: AsyncSession = Depends(get_db)):
+    latest_successful_import = (
+        select(
+            ImportJob.region.label("region"),
+            func.max(ImportJob.finished_at).label("last_imported_at"),
+        )
+        .where(ImportJob.status == "completed", ImportJob.region.is_not(None))
+        .group_by(ImportJob.region)
+        .subquery()
+    )
     stmt = (
         select(
             Place.region,
             func.count(Place.id).label("place_count"),
             func.array_agg(func.distinct(Place.source)).label("sources"),
+            latest_successful_import.c.last_imported_at,
+        )
+        .outerjoin(
+            latest_successful_import,
+            latest_successful_import.c.region == Place.region,
         )
         .where(Place.region.is_not(None))
-        .group_by(Place.region)
+        .group_by(Place.region, latest_successful_import.c.last_imported_at)
         .order_by(func.count(Place.id).desc())
     )
     result = await db.execute(stmt)
@@ -70,6 +88,7 @@ async def list_imports(db: AsyncSession = Depends(get_db)):
             "region": row.region,
             "place_count": int(row.place_count),
             "sources": [source for source in (row.sources or []) if source],
+            "last_imported_at": row.last_imported_at,
         }
         for row in rows
     ]
@@ -80,19 +99,65 @@ async def list_imports(db: AsyncSession = Depends(get_db)):
     )
 
 
+@router.get("/import-jobs", response_model=ImportJobListResponse)
+async def list_import_jobs(db: AsyncSession = Depends(get_db)):
+    stmt = select(ImportJob).order_by(ImportJob.created_at.desc()).limit(20)
+    rows = (await db.execute(stmt)).scalars().all()
+    data = [
+        {
+            "id": str(job.id),
+            "city": job.city,
+            "country": job.country,
+            "region": job.region,
+            "status": job.status,
+            "imported_count": int(job.imported_count or 0),
+            "total_elements": int(job.total_elements or 0),
+            "error": job.error,
+            "created_at": job.created_at,
+            "finished_at": job.finished_at,
+        }
+        for job in rows
+    ]
+    return ImportJobListResponse(
+        data=data,
+        total=len(data),
+        message="Recent import jobs" if data else "No import jobs yet",
+    )
+
+
 @router.post("/imports", response_model=ImportResult)
 async def trigger_import(
     payload: ImportRequest, db: AsyncSession = Depends(get_db)
 ):
+    job = ImportJob(city=payload.city, country=payload.country, status="running")
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
     try:
         result = await import_city(payload.city, payload.country, db)
+        job.status = "completed"
+        job.region = result["region"]
+        job.imported_count = int(result.get("imported", 0) or 0)
+        job.total_elements = int(result.get("total_elements", 0) or 0)
+        job.error = None
+        job.finished_at = datetime.now(timezone.utc)
+        await db.commit()
     except ValueError as exc:
+        job.status = "failed"
+        job.error = str(exc)
+        job.finished_at = datetime.now(timezone.utc)
+        await db.commit()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
+        job.status = "failed"
+        job.error = str(exc)
+        job.finished_at = datetime.now(timezone.utc)
+        await db.commit()
         raise HTTPException(
             status_code=502, detail=f"Import failed: {exc}"
         ) from exc
-    return ImportResult(**result)
+    return ImportResult(job_id=str(job.id), status=job.status, **result)
 
 
 async def _load_preferences(db: AsyncSession) -> PreferencePayload:
