@@ -80,6 +80,7 @@
                 <div>
                   <p class="card-eyebrow">Route overview</p>
                   <h4>{{ overview.trip_name }}</h4>
+                  <p class="muted">{{ overview.route_label }}</p>
                 </div>
                 <p class="muted">
                   {{ overview.total_saved_places }} trip saves ·
@@ -99,6 +100,14 @@
                 <article class="summary-item">
                   <strong>{{ overview.assigned_saved_places }}</strong>
                   <span class="muted">saves already assigned to a city</span>
+                </article>
+                <article class="summary-item">
+                  <strong>{{ overview.route_distance_km ? `${Math.round(overview.route_distance_km)} km` : 'n/a' }}</strong>
+                  <span class="muted">mapped route distance</span>
+                </article>
+                <article class="summary-item">
+                  <strong>{{ overview.cities_without_places }}</strong>
+                  <span class="muted">stops still missing a shortlist</span>
                 </article>
               </div>
               <TripRoutePlanner v-if="overview.cities.length || overview.unassigned_places.length" :overview="overview" />

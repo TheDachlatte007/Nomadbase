@@ -133,6 +133,15 @@ Status: done for the current alpha scope
   - recent job history stays useful after page reloads
 Status: done
 
+### Item 5: Richer trip intelligence
+- Turn the planner into a decision surface, not just a storage view.
+- Add route-level highlights plus city-level discovery suggestions from the owned places dataset.
+- Success criteria:
+  - the trip overview summarizes route coverage and rough route distance
+  - each city shows useful next discovery candidates that are not already saved
+  - a discovery candidate can be saved straight into the current city without leaving the planner
+Status: done
+
 ## Constraints
 
 - Do not depend on local Docker for verification.

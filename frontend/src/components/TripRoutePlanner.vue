@@ -10,6 +10,12 @@
       </p>
     </div>
 
+    <div v-if="overview.route_highlights?.length" class="route-overview-list">
+      <span v-for="highlight in overview.route_highlights" :key="highlight" class="fact-pill">
+        {{ highlight }}
+      </span>
+    </div>
+
     <div ref="mapEl" class="route-map"></div>
 
     <div class="trip-planner-grid">
@@ -96,6 +102,42 @@
             </article>
           </div>
         </div>
+
+        <div v-if="city.discovery_candidates?.length" class="route-suggestions">
+          <p class="card-eyebrow">Good next discoveries</p>
+          <div class="route-place-list">
+            <article
+              v-for="place in city.discovery_candidates"
+              :key="place.place_id"
+              class="route-place-button route-place-button--static"
+            >
+              <strong>{{ place.name }}</strong>
+              <span class="muted">
+                {{ place.place_type }}
+                <template v-if="place.distance_km !== null"> · {{ place.distance_km }} km away</template>
+              </span>
+              <span class="muted">{{ place.reason }}</span>
+              <span v-if="place.description" class="muted">{{ place.description }}</span>
+              <div class="trip-actions">
+                <button
+                  class="secondary-button action-button"
+                  type="button"
+                  @click="focusCoordinates(place.lat, place.lon, 14)"
+                >
+                  Focus
+                </button>
+                <button
+                  class="action-button"
+                  type="button"
+                  :disabled="savingDiscoveryId === place.place_id"
+                  @click="saveDiscoveryPlace(city, place)"
+                >
+                  {{ savingDiscoveryId === place.place_id ? 'Saving...' : `Save to ${city.name}` }}
+                </button>
+              </div>
+            </article>
+          </div>
+        </div>
       </article>
 
       <article v-if="overview.unassigned_places.length" class="trip-planner-city trip-planner-city--muted">
@@ -138,6 +180,7 @@ const savedStore = useSavedStore()
 const tripsStore = useTripsStore()
 const mapEl = ref(null)
 const assigningPlaceId = ref('')
+const savingDiscoveryId = ref('')
 const cityNoteDrafts = reactive({})
 const cityFeedback = reactive({})
 const routeCities = computed(() =>
@@ -208,6 +251,16 @@ async function assignSuggestedPlace(city, place) {
     await tripsStore.fetchTripOverview(props.overview.trip_id)
   } finally {
     assigningPlaceId.value = ''
+  }
+}
+
+async function saveDiscoveryPlace(city, place) {
+  savingDiscoveryId.value = place.place_id
+  try {
+    await savedStore.savePlace(place.place_id, 'want_to_visit', null, props.overview.trip_id, city.id)
+    await tripsStore.fetchTripOverview(props.overview.trip_id)
+  } finally {
+    savingDiscoveryId.value = ''
   }
 }
 

@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from geoalchemy2 import WKTElement
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
@@ -27,6 +27,16 @@ from app.schemas.trip import (
 )
 
 router = APIRouter()
+
+DISCOVERY_TYPE_BONUSES = {
+    "attraction": 22,
+    "viewpoint": 20,
+    "cultural": 20,
+    "park": 16,
+    "hiking": 16,
+    "restaurant": 14,
+    "cafe": 12,
+}
 
 
 def _parse_uuid(value: str, field_name: str) -> UUID:
@@ -113,6 +123,174 @@ def _build_city_highlights(city_entry: dict) -> list[str]:
         highlights.append("Examples: " + " · ".join(city_entry["preview_places"][:3]))
 
     return highlights[:4]
+
+
+def _build_route_label(city_names: list[str]) -> str:
+    if not city_names:
+        return "No route yet"
+    if len(city_names) <= 4:
+        return " -> ".join(city_names)
+    return " -> ".join(city_names[:3]) + f" -> +{len(city_names) - 3} more"
+
+
+def _build_route_highlights(
+    *,
+    city_count: int,
+    participant_count: int,
+    route_distance_km: float | None,
+    assigned_saved_places: int,
+    unassigned_saved_places: int,
+    cities_without_places: int,
+    top_place_types: dict[str, int],
+) -> list[str]:
+    highlights = [f"{city_count} stops planned for {participant_count or 1} traveler(s)"]
+
+    if route_distance_km is not None:
+        highlights.append(f"Approx. {round(route_distance_km)} km between mapped stops")
+    if assigned_saved_places:
+        highlights.append(f"{assigned_saved_places} places already tied to a city")
+    if unassigned_saved_places:
+        highlights.append(f"{unassigned_saved_places} saved places still need a city")
+    if cities_without_places:
+        highlights.append(f"{cities_without_places} stops still need their first shortlist")
+    if top_place_types:
+        top_entries = sorted(
+            top_place_types.items(), key=lambda item: (-item[1], item[0])
+        )[:3]
+        highlights.append(
+            "Route mix: "
+            + " · ".join(f"{place_type} {count}" for place_type, count in top_entries)
+        )
+
+    return highlights[:5]
+
+
+def _build_discovery_reason(
+    city_entry: dict,
+    *,
+    place_type: str,
+    region: str | None,
+    tags: dict | None,
+    distance_km: float | None,
+) -> str:
+    reasons: list[str] = []
+    city_name = (city_entry.get("name") or "").lower()
+    normalized_region = (region or "").lower()
+    tags = tags or {}
+
+    if distance_km is not None:
+        if distance_km <= 3:
+            reasons.append("Very close to this stop")
+        elif distance_km <= 10:
+            reasons.append("Easy detour from the city")
+        elif distance_km <= 25:
+            reasons.append("Reachable side trip")
+
+    if city_name and city_name in normalized_region:
+        reasons.append("Matches the imported city region")
+
+    if tags.get("diet:vegan") == "yes" or tags.get("diet:vegetarian") == "yes":
+        reasons.append("Has vegan or vegetarian signal")
+    elif place_type in {"restaurant", "cafe"}:
+        reasons.append("Useful food stop candidate")
+    elif place_type in {"attraction", "cultural", "viewpoint"}:
+        reasons.append("Good sightseeing pick")
+    elif place_type in {"park", "hiking"}:
+        reasons.append("Good outdoor break")
+
+    return " · ".join(reasons[:2]) or "Relevant for this route stop"
+
+
+async def _load_city_discovery_candidates(
+    db: AsyncSession,
+    city_entry: dict,
+    excluded_place_ids: set[UUID],
+) -> list[dict]:
+    city_name = city_entry.get("name")
+    country = city_entry.get("country")
+    lat = city_entry.get("lat")
+    lon = city_entry.get("lon")
+    city_name_pattern = f"%{city_name.lower()}%" if city_name else None
+    country_pattern = f"%{country.lower()}%" if country else None
+
+    stmt = select(
+        Place.id,
+        Place.name,
+        Place.place_type,
+        Place.description,
+        Place.region,
+        Place.tags,
+        func.ST_Y(Place.location).label("lat"),
+        func.ST_X(Place.location).label("lon"),
+    )
+
+    if excluded_place_ids:
+        stmt = stmt.where(Place.id.notin_(excluded_place_ids))
+
+    filters = []
+    if city_name_pattern:
+        filters.append(func.lower(func.coalesce(Place.region, "")).like(city_name_pattern))
+        filters.append(func.lower(Place.name).like(city_name_pattern))
+    if country_pattern:
+        filters.append(func.lower(func.coalesce(Place.region, "")).like(country_pattern))
+    if lat is not None and lon is not None:
+        city_point = WKTElement(f"POINT({lon} {lat})", srid=4326)
+        filters.append(func.ST_DistanceSphere(Place.location, city_point) <= 25000)
+
+    if filters:
+        stmt = stmt.where(or_(*filters))
+
+    rows = (await db.execute(stmt.limit(40))).all()
+    candidates: list[dict] = []
+    for row in rows:
+        distance_km = _distance_km(lat, lon, row.lat, row.lon)
+        place_payload = {
+            "region": row.region,
+            "lat": float(row.lat),
+            "lon": float(row.lon),
+        }
+        score = _suggest_place_for_city(city_entry, place_payload)
+        score += DISCOVERY_TYPE_BONUSES.get(row.place_type, 8)
+        tags = row.tags or {}
+        if tags.get("diet:vegan") == "yes":
+            score += 20
+        elif tags.get("diet:vegetarian") == "yes":
+            score += 12
+        if row.description:
+            score += 4
+
+        if score < 35:
+            continue
+
+        candidates.append(
+            {
+                "place_id": str(row.id),
+                "name": row.name,
+                "place_type": row.place_type,
+                "description": row.description,
+                "region": row.region,
+                "lat": float(row.lat),
+                "lon": float(row.lon),
+                "distance_km": round(distance_km, 1) if distance_km is not None else None,
+                "score": score,
+                "reason": _build_discovery_reason(
+                    city_entry,
+                    place_type=row.place_type,
+                    region=row.region,
+                    tags=tags,
+                    distance_km=distance_km,
+                ),
+            }
+        )
+
+    candidates.sort(
+        key=lambda item: (
+            -item["score"],
+            item["distance_km"] if item["distance_km"] is not None else 9999,
+            item["name"].lower(),
+        )
+    )
+    return candidates[:4]
 
 
 async def _load_trip_payloads(
@@ -283,6 +461,7 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
             "highlights": [],
             "places": [],
             "suggested_unassigned_places": [],
+            "discovery_candidates": [],
         }
         for row in city_rows
     }
@@ -320,8 +499,11 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
     assigned_saved_places = 0
     unassigned_saved_places = 0
     unassigned_places: list[dict] = []
+    assigned_place_type_totals: dict[str, int] = {}
+    saved_place_ids: set[UUID] = set()
 
     for row in saved_rows:
+        saved_place_ids.add(row.place_id)
         place_payload = {
             "saved_place_id": str(row.saved_place_id),
             "place_id": str(row.place_id),
@@ -355,6 +537,9 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
         if row.place_type:
             city_entry["place_type_counts"][row.place_type] = (
                 city_entry["place_type_counts"].get(row.place_type, 0) + 1
+            )
+            assigned_place_type_totals[row.place_type] = (
+                assigned_place_type_totals.get(row.place_type, 0) + 1
             )
         if row.name and row.name not in city_entry["preview_places"]:
             city_entry["preview_places"].append(row.name)
@@ -392,6 +577,32 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
         for item in city_entry["suggested_unassigned_places"]:
             unique_suggestions[item["saved_place_id"]] = item
         city_entry["suggested_unassigned_places"] = list(unique_suggestions.values())[:3]
+        city_entry["discovery_candidates"] = await _load_city_discovery_candidates(
+            db, city_entry, saved_place_ids
+        )
+
+    route_distance_km = None
+    route_coordinates = [
+        (row.lat, row.lon)
+        for row in city_rows
+        if row.lat is not None and row.lon is not None
+    ]
+    if len(route_coordinates) >= 2:
+        route_distance_km = 0.0
+        for index in range(1, len(route_coordinates)):
+            leg_distance = _distance_km(
+                route_coordinates[index - 1][0],
+                route_coordinates[index - 1][1],
+                route_coordinates[index][0],
+                route_coordinates[index][1],
+            )
+            if leg_distance is not None:
+                route_distance_km += leg_distance
+
+    cities_without_places = sum(
+        1 for city_entry in city_map.values() if city_entry["saved_count"] == 0
+    )
+    city_names = [row.name for row in city_rows]
 
     return {
         "trip_id": str(trip.id),
@@ -401,6 +612,20 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
         "total_saved_places": total_saved_places,
         "assigned_saved_places": assigned_saved_places,
         "unassigned_saved_places": unassigned_saved_places,
+        "route_label": _build_route_label(city_names),
+        "route_distance_km": round(route_distance_km, 1)
+        if route_distance_km is not None
+        else None,
+        "cities_without_places": cities_without_places,
+        "route_highlights": _build_route_highlights(
+            city_count=len(city_rows),
+            participant_count=participant_count,
+            route_distance_km=route_distance_km,
+            assigned_saved_places=assigned_saved_places,
+            unassigned_saved_places=unassigned_saved_places,
+            cities_without_places=cities_without_places,
+            top_place_types=assigned_place_type_totals,
+        ),
         "cities": [city_map[row.id] for row in city_rows],
         "unassigned_places": unassigned_places,
     }

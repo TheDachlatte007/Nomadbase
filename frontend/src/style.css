@@ -683,8 +683,9 @@ code {
 }
 
 .route-overview-list {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .trip-planner {
@@ -757,6 +758,10 @@ code {
 .route-city-notes {
   display: grid;
   gap: 10px;
+}
+
+.route-suggestions .trip-actions {
+  margin-top: 2px;
 }
 
 .route-city-notes textarea {

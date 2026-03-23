@@ -94,6 +94,7 @@ class TripOverviewCityResponse(BaseModel):
     highlights: list[str]
     places: list["TripOverviewPlaceResponse"]
     suggested_unassigned_places: list["TripOverviewSuggestedPlaceResponse"]
+    discovery_candidates: list["TripOverviewDiscoveryPlaceResponse"]
 
 
 class TripOverviewPlaceResponse(BaseModel):
@@ -121,6 +122,19 @@ class TripOverviewSuggestedPlaceResponse(BaseModel):
     suggestion_score: int
 
 
+class TripOverviewDiscoveryPlaceResponse(BaseModel):
+    place_id: str
+    name: str
+    place_type: str
+    description: str | None = None
+    region: str | None = None
+    lat: float
+    lon: float
+    distance_km: float | None = None
+    score: int
+    reason: str
+
+
 class TripOverviewResponse(BaseModel):
     trip_id: str
     trip_name: str
@@ -129,6 +143,10 @@ class TripOverviewResponse(BaseModel):
     total_saved_places: int
     assigned_saved_places: int
     unassigned_saved_places: int
+    route_label: str
+    route_distance_km: float | None = None
+    cities_without_places: int
+    route_highlights: list[str]
     cities: list[TripOverviewCityResponse]
     unassigned_places: list[TripOverviewPlaceResponse]
 
