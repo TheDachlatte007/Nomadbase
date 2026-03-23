@@ -544,6 +544,16 @@ code {
   padding-top: 8px;
 }
 
+.route-overview-strip {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.route-city-chip {
+  padding: 0.55rem 0.8rem;
+}
+
 .tag-chip {
   cursor: pointer;
   border: 1.5px solid var(--border);

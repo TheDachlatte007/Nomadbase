@@ -142,6 +142,15 @@ Status: done
   - a discovery candidate can be saved straight into the current city without leaving the planner
 Status: done
 
+### Item 6: Map surface v1.1
+- Strengthen the map as the main discovery surface instead of leaving route context trapped in the planner.
+- Tie active trip routing directly into the map and fix the inline import flow against the new background-job model.
+- Success criteria:
+  - the active trip route is visible directly on the map page
+  - city chips can jump discovery to a planned stop quickly on mobile
+  - inline imports work again with queued background jobs instead of the old synchronous flow
+Status: done
+
 ## Constraints
 
 - Do not depend on local Docker for verification.

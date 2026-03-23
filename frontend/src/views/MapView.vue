@@ -57,6 +57,26 @@
             </select>
           </label>
         </div>
+        <div v-if="tripOverview?.cities?.length" class="route-overview-strip">
+          <div>
+            <p class="card-eyebrow">Active route</p>
+            <p class="muted">
+              {{ tripOverview.route_label }}
+              <span v-if="tripOverview.route_distance_km">· {{ Math.round(tripOverview.route_distance_km) }} km</span>
+            </p>
+          </div>
+          <div class="chip-row">
+            <button
+              v-for="city in tripOverview.cities"
+              :key="city.id"
+              class="secondary-button action-button route-city-chip"
+              type="button"
+              @click="applyTripCity(city)"
+            >
+              {{ city.sort_order + 1 }}. {{ city.name }}
+            </button>
+          </div>
+        </div>
         <div class="tag-filter-row">
           <span
             v-for="chip in TAG_CHIPS"
@@ -203,6 +223,7 @@ const totalAvailable = computed(() => placesStore.totalAvailable)
 const resultMessage = computed(() => placesStore.message)
 const trips = computed(() => tripsStore.trips)
 const activeTrip = computed(() => tripsStore.activeTrip)
+const tripOverview = computed(() => tripsStore.tripOverview)
 const importedRegions = computed(() => {
   return (adminStore.imports || [])
     .map((item) => item.region)
@@ -284,10 +305,11 @@ watch(
 
 watch(
   () => route.query.trip,
-  (tripId) => {
+  async (tripId) => {
     if (typeof tripId === 'string') {
       selectedTripId.value = tripId
       tripsStore.setActiveTrip(tripId)
+      await tripsStore.fetchTripOverview(tripId).catch(() => {})
       runSearch().catch(() => {})
     }
   },
@@ -295,6 +317,9 @@ watch(
 )
 
 watch(selectedTripId, (tripId) => {
+  if (tripId) {
+    tripsStore.fetchTripOverview(tripId).catch(() => {})
+  }
   for (const form of Object.values(saveForms)) {
     if (!form.trip_id) {
       form.trip_id = tripId || ''
@@ -341,6 +366,7 @@ const TYPE_COLORS = {
 
 let map = null
 let clusterGroup = null
+let routeLayerGroup = null
 const placeMarkers = new Map()
 let userMarker = null
 
@@ -360,6 +386,37 @@ function focusOnMap(place) {
     clusterGroup.zoomToShowLayer(marker, () => marker.openPopup())
   } else {
     map.setView([place.lat, place.lon], 15, { animate: true })
+  }
+}
+
+function syncRouteOverlay(overview) {
+  if (!map || !routeLayerGroup) return
+  routeLayerGroup.clearLayers()
+
+  const cities = (overview?.cities || []).filter((city) => city.lat !== null && city.lon !== null)
+  if (!cities.length) return
+
+  if (cities.length > 1) {
+    L.polyline(
+      cities.map((city) => [city.lat, city.lon]),
+      {
+        color: '#0f5c52',
+        weight: 3,
+        opacity: 0.75,
+        dashArray: '6 8',
+      }
+    ).addTo(routeLayerGroup)
+  }
+
+  for (const city of cities) {
+    const marker = L.circleMarker([city.lat, city.lon], {
+      radius: 8,
+      color: '#0f5c52',
+      weight: 2,
+      fillColor: '#f8f6f1',
+      fillOpacity: 0.95,
+    }).addTo(routeLayerGroup)
+    marker.bindPopup(`<strong>${city.sort_order + 1}. ${city.name}</strong>`)
   }
 }
 
@@ -407,6 +464,7 @@ function syncMarkers(newPlaces) {
 }
 
 watch(places, syncMarkers)
+watch(tripOverview, syncRouteOverlay, { deep: true })
 
 onMounted(() => {
   adminStore.fetchImports().catch(() => {})
@@ -423,14 +481,20 @@ onMounted(() => {
     showCoverageOnHover: false,
   })
   map.addLayer(clusterGroup)
+  routeLayerGroup = L.layerGroup().addTo(map)
 
   if (places.value.length) syncMarkers(places.value)
+  if (selectedTripId.value) {
+    tripsStore.fetchTripOverview(selectedTripId.value).catch(() => {})
+  }
+  if (tripOverview.value) syncRouteOverlay(tripOverview.value)
 })
 
 onUnmounted(() => {
   map?.remove()
   map = null
   clusterGroup = null
+  routeLayerGroup = null
   placeMarkers.clear()
 })
 
@@ -455,9 +519,22 @@ function applyPreset(preset) {
   runSearch().catch(() => {})
 }
 
+function applyTripCity(city) {
+  searchQuery.value = city.name
+  const exactRegion = city.country ? `${city.name}, ${city.country}` : city.name
+  selectedRegion.value = importedRegions.value.includes(exactRegion) ? exactRegion : ''
+  runSearch().catch(() => {})
+  if (city.lat !== null && city.lon !== null) {
+    map?.setView([city.lat, city.lon], 12, { animate: true })
+  }
+}
+
 function onScopeChange() {
   importFeedback.value = ''
   tripsStore.setActiveTrip(selectedTripId.value)
+  if (selectedTripId.value) {
+    tripsStore.fetchTripOverview(selectedTripId.value).catch(() => {})
+  }
   runSearch().catch(() => {})
 }
 
@@ -520,14 +597,16 @@ async function onNearMe() {
 async function onInlineImport() {
   if (!searchQuery.value || importing.value) return
   importing.value = true
-  importFeedback.value = `Fetching OSM data for "${searchQuery.value}"… this may take up to 60s.`
+  importFeedback.value = `Queueing OSM import for "${searchQuery.value}"… this may take up to a minute.`
   try {
-    const result = await adminStore.importCity(searchQuery.value, null)
-    if (result.imported === 0) {
+    const job = await adminStore.importCity(searchQuery.value, null)
+    const result = await adminStore.waitForImportJob(job.id)
+    if (result.imported_count === 0) {
       importFeedback.value = `No named places found for "${searchQuery.value}". Try a different spelling or add the country.`
     } else {
       selectedRegion.value = result.region || selectedRegion.value
-      importFeedback.value = `Imported ${result.imported} places for ${result.region}. Loading…`
+      importFeedback.value = `Imported ${result.imported_count} places for ${result.region || searchQuery.value}. Loading…`
+      await adminStore.fetchImports().catch(() => {})
       await runSearch()
     }
   } catch (error) {
