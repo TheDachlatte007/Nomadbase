@@ -94,7 +94,7 @@ The alpha now supports expense creation, visit logging, recent activity lists, a
 **Plans**: TBD
 
 Current reality note:
-Preferences, import inventory, system metrics, and recent import job history are now exposed in the API and frontend alpha. Imports now queue immediately and run in the background inside the app process; later work should focus on retry strategy, scheduled updates, and a richer import pipeline rather than more admin scaffolding.
+Preferences, import inventory, system metrics, and recent import job history are now exposed in the API and frontend alpha. Imports now queue immediately, run in the background inside the app process, normalize regions more cleanly, and have basic Overpass fallback resilience. Later work should focus on retry strategy, scheduled updates, and a richer import pipeline rather than more admin scaffolding.
 
 ## Progress
 

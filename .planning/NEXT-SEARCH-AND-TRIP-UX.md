@@ -151,6 +151,15 @@ Status: done
   - inline imports work again with queued background jobs instead of the old synchronous flow
 Status: done
 
+### Item 7: Import quality + coverage
+- Make the import core more resilient before building deeper data workflows on top.
+- Normalize imported region names, add Overpass endpoint fallbacks, and broaden OSM category coverage without blowing up the surface area.
+- Success criteria:
+  - imports normalize to a more stable canonical region name
+  - import jobs survive a single Overpass endpoint outage better
+  - imported data includes a slightly wider spread of useful travel places inside the existing alpha model
+Status: done
+
 ## Constraints
 
 - Do not depend on local Docker for verification.

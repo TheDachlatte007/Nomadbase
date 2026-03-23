@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Sequential plan items 1-6 completed for the current alpha slice
-last_updated: "2026-03-23T13:25:00+01:00"
-last_activity: 2026-03-23 — The map surface was upgraded with trip-route context and the inline import flow was aligned with background jobs
+stopped_at: Sequential plan items 1-7 completed for the current alpha slice
+last_updated: "2026-03-24T09:40:00+01:00"
+last_activity: 2026-03-24 — Import quality and coverage were hardened with canonical regions and Overpass fallbacks
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 3
   completed_plans: 0
-  percent: 93
+  percent: 95
 ---
 
 # Project State
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 Phase: Cross-phase alpha slice after deployment-first bootstrap
 Plan: Turn the shell into a usable end-to-end alpha before deeper map/import work
 Status: In progress
-Last activity: 2026-03-23 — The current execution plan was worked top-to-bottom through trip planner, import admin, deploy guardrails, background import execution, richer trip intelligence, and map surface v1.1
+Last activity: 2026-03-24 — The current execution plan was worked top-to-bottom through trip planner, import admin, deploy guardrails, background import execution, richer trip intelligence, map surface v1.1, and import quality hardening
 
-Progress: [█████████░] 93%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -68,7 +68,7 @@ Recent decisions affecting current work:
 ### Pending Todos
 
 - Replace the current Leaflet discovery surface with the planned MapLibre map and viewport-driven POI loading.
-- The next execution plan should focus on deeper import quality and data coverage, not on more surface-level map polish.
+- The next execution plan should focus on a deeper import pipeline and broader owned data coverage, not on more surface-level polish.
 - Extend smoke checks later into authenticated/admin-safe checks once the deployment loop is more stable.
 - Implement the real OSM import pipeline and connect admin import actions to it.
 - Tighten deployment defaults further: environment-specific CORS, secrets handling, and homeserver-ready config.
@@ -80,7 +80,7 @@ Recent decisions affecting current work:
 - App must be usable within 1-2 months before trip departure — tight timeline
 - 100k+ POI data volume still requires proper viewport queries and spatial index validation once the real map lands.
 - The trip planner is now usable in alpha form, with city notes, route summaries, and city-level discovery suggestions.
-- Search is noticeably better, but deeper import quality, live enrichment, and better imported-region normalization are still open.
+- Search is noticeably better, and import quality is more resilient now, but a deeper import pipeline, live enrichment, and better owned-data coverage are still open.
 - Imports are now backgrounded and traceable, but they still depend on Overpass/Nominatim availability and app-process uptime.
 - There is still no separate worker or retry queue yet; jobs run inside the app process for alpha simplicity.
 - Local Docker validation is currently blocked by Docker Desktop returning `500 Internal Server Error` on daemon API calls.
@@ -88,5 +88,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-23T11:35:00+01:00
-Stopped at: Sequential plan items 1-6 completed for the current alpha slice
+Stopped at: Sequential plan items 1-7 completed for the current alpha slice
 Resume file: .planning/NEXT-SEARCH-AND-TRIP-UX.md

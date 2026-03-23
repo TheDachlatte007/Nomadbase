@@ -16,7 +16,11 @@ from app.models.place import Place
 logger = logging.getLogger(__name__)
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+OVERPASS_URLS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter",
+]
 
 # Maps (OSM key, OSM value) → our place_type
 TAG_TYPE_MAP: dict[tuple[str, str], str] = {
@@ -28,14 +32,20 @@ TAG_TYPE_MAP: dict[tuple[str, str], str] = {
     ("amenity", "pub"): "cafe",
     ("amenity", "ice_cream"): "cafe",
     ("amenity", "bakery"): "cafe",
+    ("amenity", "library"): "cultural",
+    ("amenity", "arts_centre"): "cultural",
+    ("amenity", "cinema"): "cultural",
+    ("amenity", "theatre"): "cultural",
     ("amenity", "place_of_worship"): "cultural",
     ("tourism", "attraction"): "attraction",
     ("tourism", "museum"): "cultural",
     ("tourism", "gallery"): "cultural",
+    ("tourism", "artwork"): "cultural",
     ("tourism", "zoo"): "attraction",
     ("tourism", "theme_park"): "attraction",
     ("tourism", "aquarium"): "attraction",
     ("tourism", "viewpoint"): "viewpoint",
+    ("tourism", "camp_site"): "park",
     ("leisure", "park"): "park",
     ("leisure", "garden"): "park",
     ("leisure", "nature_reserve"): "park",
@@ -43,6 +53,12 @@ TAG_TYPE_MAP: dict[tuple[str, str], str] = {
     ("natural", "waterfall"): "hiking",
     ("natural", "beach"): "park",
     ("natural", "cave_entrance"): "hiking",
+    ("historic", "castle"): "cultural",
+    ("historic", "memorial"): "cultural",
+    ("historic", "monument"): "cultural",
+    ("historic", "archaeological_site"): "cultural",
+    ("historic", "ruins"): "cultural",
+    ("shop", "bakery"): "cafe",
 }
 
 # Overpass union filter lines — only named POIs (unnamed ones are discarded anyway)
@@ -65,11 +81,39 @@ out center tags;
 
 
 def _detect_type(tags: dict) -> str:
-    for key in ("amenity", "tourism", "leisure", "natural"):
+    for key in ("amenity", "tourism", "leisure", "natural", "historic", "shop"):
         value = tags.get(key)
         if value and (key, value) in TAG_TYPE_MAP:
             return TAG_TYPE_MAP[(key, value)]
     return "attraction"
+
+
+def _normalize_region(
+    result: dict, city: str, country: str | None = None
+) -> str:
+    address = result.get("address") or {}
+    locality = next(
+        (
+            address.get(key)
+            for key in (
+                "city",
+                "town",
+                "municipality",
+                "village",
+                "county",
+                "state_district",
+                "state",
+            )
+            if address.get(key)
+        ),
+        None,
+    )
+    country_name = address.get("country") or country
+    locality = locality or result.get("name") or city
+
+    if locality and country_name:
+        return f"{locality}, {country_name}"
+    return locality or result.get("display_name") or city
 
 
 def _build_place(element: dict, region: str) -> dict | None:
@@ -142,7 +186,13 @@ async def geocode_city(city: str, country: str | None = None) -> dict | None:
     ) as client:
         resp = await client.get(
             NOMINATIM_URL,
-            params={"q": query, "format": "json", "limit": 1},
+            params={
+                "q": query,
+                "format": "jsonv2",
+                "limit": 1,
+                "addressdetails": 1,
+                "namedetails": 1,
+            },
         )
         resp.raise_for_status()
         results = resp.json()
@@ -160,16 +210,28 @@ async def geocode_city(city: str, country: str | None = None) -> dict | None:
         "west": float(bb[2]),
         "east": float(bb[3]),
         "display_name": results[0].get("display_name", city),
+        "normalized_region": _normalize_region(results[0], city, country),
     }
 
 
 async def fetch_overpass(bbox: dict) -> list[dict]:
     """Queries Overpass and returns raw elements."""
     query = _overpass_query(bbox["south"], bbox["west"], bbox["north"], bbox["east"])
+    errors: list[str] = []
     async with httpx.AsyncClient(timeout=150) as client:
-        resp = await client.post(OVERPASS_URL, data={"data": query})
-        resp.raise_for_status()
-        return resp.json().get("elements", [])
+        for endpoint in OVERPASS_URLS:
+            try:
+                resp = await client.post(endpoint, data={"data": query})
+                resp.raise_for_status()
+                logger.info("Overpass import succeeded via %s", endpoint)
+                return resp.json().get("elements", [])
+            except httpx.HTTPError as exc:
+                logger.warning("Overpass endpoint failed: %s (%s)", endpoint, exc)
+                errors.append(f"{endpoint}: {exc}")
+
+    raise RuntimeError(
+        "Overpass import failed across fallback endpoints: " + " | ".join(errors)
+    )
 
 
 async def import_city(
@@ -185,7 +247,7 @@ async def import_city(
     if bbox is None:
         raise ValueError(f"Could not geocode city: {city}")
 
-    region = city if not country else f"{city}, {country}"
+    region = bbox.get("normalized_region") or (city if not country else f"{city}, {country}")
     elements = await fetch_overpass(bbox)
     logger.info("Overpass returned %d elements for %s", len(elements), region)
 
