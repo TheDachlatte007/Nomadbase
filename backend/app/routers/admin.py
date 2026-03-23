@@ -1,6 +1,4 @@
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,20 +13,36 @@ from app.models.saved_place import SavedPlace
 from app.models.trip import Trip
 from app.models.visit import Visit
 from app.schemas.admin import (
+    ImportJobItem,
+    ImportJobResponse,
     ImportJobListResponse,
     ImportRequest,
-    ImportResult,
     ImportStatusResponse,
     PreferencesResponse,
     PreferencePayload,
     SystemStatusResponse,
 )
-from app.services.overpass import import_city
+from app.services.import_jobs import run_import_job
 
 router = APIRouter()
 
 
 PREFERENCE_DEFAULTS = PreferencePayload()
+
+
+def _serialize_import_job(job: ImportJob) -> ImportJobItem:
+    return ImportJobItem(
+        id=str(job.id),
+        city=job.city,
+        country=job.country,
+        region=job.region,
+        status=job.status,
+        imported_count=int(job.imported_count or 0),
+        total_elements=int(job.total_elements or 0),
+        error=job.error,
+        created_at=job.created_at,
+        finished_at=job.finished_at,
+    )
 
 
 @router.get("/status", response_model=SystemStatusResponse)
@@ -103,21 +117,7 @@ async def list_imports(db: AsyncSession = Depends(get_db)):
 async def list_import_jobs(db: AsyncSession = Depends(get_db)):
     stmt = select(ImportJob).order_by(ImportJob.created_at.desc()).limit(20)
     rows = (await db.execute(stmt)).scalars().all()
-    data = [
-        {
-            "id": str(job.id),
-            "city": job.city,
-            "country": job.country,
-            "region": job.region,
-            "status": job.status,
-            "imported_count": int(job.imported_count or 0),
-            "total_elements": int(job.total_elements or 0),
-            "error": job.error,
-            "created_at": job.created_at,
-            "finished_at": job.finished_at,
-        }
-        for job in rows
-    ]
+    data = [_serialize_import_job(job) for job in rows]
     return ImportJobListResponse(
         data=data,
         total=len(data),
@@ -125,39 +125,40 @@ async def list_import_jobs(db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.post("/imports", response_model=ImportResult)
+@router.get("/import-jobs/{job_id}", response_model=ImportJobResponse)
+async def get_import_job(job_id: str, db: AsyncSession = Depends(get_db)):
+    job = await db.get(ImportJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Import job not found")
+
+    return ImportJobResponse(data=_serialize_import_job(job), message="Import job")
+
+
+@router.post(
+    "/imports",
+    response_model=ImportJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def trigger_import(
-    payload: ImportRequest, db: AsyncSession = Depends(get_db)
+    payload: ImportRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
 ):
-    job = ImportJob(city=payload.city, country=payload.country, status="running")
+    normalized_city = payload.city.strip()
+    normalized_country = payload.country.strip() if payload.country else None
+
+    if not normalized_city:
+        raise HTTPException(status_code=422, detail="City is required")
+
+    job = ImportJob(city=normalized_city, country=normalized_country, status="queued")
     db.add(job)
     await db.commit()
     await db.refresh(job)
-
-    try:
-        result = await import_city(payload.city, payload.country, db)
-        job.status = "completed"
-        job.region = result["region"]
-        job.imported_count = int(result.get("imported", 0) or 0)
-        job.total_elements = int(result.get("total_elements", 0) or 0)
-        job.error = None
-        job.finished_at = datetime.now(timezone.utc)
-        await db.commit()
-    except ValueError as exc:
-        job.status = "failed"
-        job.error = str(exc)
-        job.finished_at = datetime.now(timezone.utc)
-        await db.commit()
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except Exception as exc:
-        job.status = "failed"
-        job.error = str(exc)
-        job.finished_at = datetime.now(timezone.utc)
-        await db.commit()
-        raise HTTPException(
-            status_code=502, detail=f"Import failed: {exc}"
-        ) from exc
-    return ImportResult(job_id=str(job.id), status=job.status, **result)
+    background_tasks.add_task(run_import_job, job.id)
+    return ImportJobResponse(
+        data=_serialize_import_job(job),
+        message="Import queued in background",
+    )
 
 
 async def _load_preferences(db: AsyncSession) -> PreferencePayload:

@@ -40,6 +40,11 @@ class ImportJobItem(BaseModel):
     finished_at: datetime | None = None
 
 
+class ImportJobResponse(BaseModel):
+    data: ImportJobItem
+    message: str
+
+
 class ImportJobListResponse(BaseModel):
     data: list[ImportJobItem]
     total: int
@@ -56,12 +61,3 @@ class SystemStatusResponse(BaseModel):
 class ImportRequest(BaseModel):
     city: str
     country: Optional[str] = None
-
-
-class ImportResult(BaseModel):
-    job_id: str
-    status: str
-    region: str
-    imported: int
-    total_elements: int
-    bbox: Optional[dict] = None

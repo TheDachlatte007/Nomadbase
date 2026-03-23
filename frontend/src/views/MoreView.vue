@@ -51,7 +51,7 @@
       <ul class="simple-list">
         <li>DB data persists in a named Docker volume — survives app updates.</li>
         <li>Alembic migrations run automatically before API boot.</li>
-        <li>Frontend is built with Vue 3 + Vite, served by nginx.</li>
+        <li>Frontend is built with Vue 3 + Vite and served by the FastAPI app.</li>
         <li>OSM data imports automatically when cities are added to trips.</li>
         <li>Alpha seed places load on first boot if no data exists.</li>
       </ul>
@@ -135,7 +135,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch, onMounted } from 'vue'
+import { ref, computed, reactive, watch, onBeforeUnmount, onMounted } from 'vue'
 import { useAdminStore } from '../stores/admin.js'
 import { listCacheEntries, deleteCache } from '../utils/offlineDb.js'
 
@@ -162,6 +162,18 @@ watch(
     prefForm.interests = (prefs.interests || []).join(', ')
     prefForm.dietary_filters = (prefs.dietary_filters || []).join(', ')
     prefForm.budget_level = prefs.budget_level || 'balanced'
+  },
+  { immediate: true }
+)
+
+watch(
+  importJobs,
+  (jobs) => {
+    if (jobs.some((job) => ['queued', 'running'].includes(job.status))) {
+      startImportPolling()
+      return
+    }
+    clearImportPoll()
   },
   { immediate: true }
 )
@@ -232,7 +244,22 @@ onMounted(() => {
 const importForm = reactive({ city: '', country: '' })
 const importing = ref(false)
 const importFeedback = ref('')
-const importText = computed(() => (importing.value ? 'Importing… (may take 60s)' : 'Import places'))
+const importText = computed(() => (importing.value ? 'Import running…' : 'Import places'))
+let importPollHandle = null
+
+function clearImportPoll() {
+  if (importPollHandle !== null) {
+    window.clearInterval(importPollHandle)
+    importPollHandle = null
+  }
+}
+
+function startImportPolling() {
+  clearImportPoll()
+  importPollHandle = window.setInterval(() => {
+    adminStore.fetchImportJobs().catch(() => {})
+  }, 4000)
+}
 
 async function onImport() {
   await runImport(importForm.city, importForm.country || null, true)
@@ -240,10 +267,13 @@ async function onImport() {
 
 async function runImport(city, country = null, resetForm = false) {
   importing.value = true
-  importFeedback.value = `Fetching OSM data for ${city}…`
+  importFeedback.value = `Queuing import for ${city}…`
   try {
-    const result = await adminStore.importCity(city, country)
-    importFeedback.value = `Done — ${result.imported} places imported for ${result.region}.`
+    const job = await adminStore.importCity(city, country)
+    importFeedback.value = `${job.city} is queued. The import keeps running in the background.`
+    startImportPolling()
+    const result = await adminStore.waitForImportJob(job.id)
+    importFeedback.value = `Done — ${result.imported_count} places imported for ${result.region || result.city}.`
     if (resetForm) {
       importForm.city = ''
       importForm.country = ''
@@ -258,4 +288,8 @@ async function runImport(city, country = null, resetForm = false) {
 async function rerunImport(job) {
   await runImport(job.city, job.country || null, false)
 }
+
+onBeforeUnmount(() => {
+  clearImportPoll()
+})
 </script>

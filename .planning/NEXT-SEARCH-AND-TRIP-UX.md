@@ -124,6 +124,15 @@ Status: done
   - core alpha failures are quickly visible
 Status: done for the current alpha scope
 
+### Item 4: Import execution v2
+- Move city imports out of the blocking request path.
+- Keep the admin surface responsive while jobs run in the background.
+- Success criteria:
+  - import requests return quickly with a queued job
+  - the UI can poll a single import job and show queued/running/completed states
+  - recent job history stays useful after page reloads
+Status: done
+
 ## Constraints
 
 - Do not depend on local Docker for verification.
