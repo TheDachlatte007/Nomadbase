@@ -449,6 +449,11 @@ code {
   background: rgba(255, 255, 255, 0.62);
 }
 
+.import-item--failed {
+  border-color: rgba(200, 111, 49, 0.35);
+  background: rgba(200, 111, 49, 0.08);
+}
+
 .status-block {
   display: grid;
   gap: 12px;
@@ -737,6 +742,32 @@ code {
 .route-place-button:hover {
   border-color: rgba(15, 92, 82, 0.35);
   background: rgba(215, 235, 231, 0.42);
+}
+
+.route-place-button--static {
+  cursor: default;
+}
+
+.route-place-button--static:hover {
+  background: var(--surface-strong);
+}
+
+.route-highlights,
+.route-suggestions,
+.route-city-notes {
+  display: grid;
+  gap: 10px;
+}
+
+.route-city-notes textarea {
+  min-height: 90px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text);
+  font: inherit;
 }
 
 .chip--active-context {

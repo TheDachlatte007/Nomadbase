@@ -109,6 +109,19 @@ export const useTripsStore = defineStore('trips', () => {
     }
   }
 
+  async function updateCity(tripId, cityId, data) {
+    const res = await fetch(`/api/trips/${tripId}/cities/${cityId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) throw new Error(await readError(res, 'Update city failed'))
+    await fetchTrips()
+    if (activeTripId.value === tripId) {
+      await fetchTripOverview(tripId)
+    }
+  }
+
   async function reorderCities(tripId, cityIds) {
     const res = await fetch(`/api/trips/${tripId}/cities/reorder`, {
       method: 'POST',
@@ -192,6 +205,7 @@ export const useTripsStore = defineStore('trips', () => {
     createTrip,
     addCity,
     removeCity,
+    updateCity,
     reorderCities,
     addParticipant,
     removeParticipant,

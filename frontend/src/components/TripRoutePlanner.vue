@@ -41,6 +41,22 @@
 
         <p class="muted">{{ summarizePlaceTypes(city.place_type_counts) }}</p>
 
+        <div v-if="city.highlights?.length" class="route-highlights">
+          <span v-for="highlight in city.highlights" :key="highlight" class="fact-pill">{{ highlight }}</span>
+        </div>
+
+        <form class="route-city-notes" @submit.prevent="saveCityNotes(city)">
+          <label class="map-filter-field">
+            <span class="card-eyebrow">City notes</span>
+            <textarea
+              v-model="cityNoteDrafts[city.id]"
+              placeholder="Why this stop matters, what to book, what to remember..."
+            ></textarea>
+          </label>
+          <button class="secondary-button action-button" type="submit">Save notes</button>
+          <p v-if="cityFeedback[city.id]" class="feedback">{{ cityFeedback[city.id] }}</p>
+        </form>
+
         <div v-if="city.places.length" class="route-place-list">
           <button
             v-for="place in city.places"
@@ -55,6 +71,31 @@
           </button>
         </div>
         <p v-else class="muted">No saved places assigned to this city yet.</p>
+
+        <div v-if="city.suggested_unassigned_places?.length" class="route-suggestions">
+          <p class="card-eyebrow">Suggested from unassigned</p>
+          <div class="route-place-list">
+            <article
+              v-for="place in city.suggested_unassigned_places"
+              :key="place.saved_place_id"
+              class="route-place-button route-place-button--static"
+            >
+              <strong>{{ place.name }}</strong>
+              <span class="muted">
+                {{ place.place_type }} · {{ humanizeStatus(place.status) }} · score {{ place.suggestion_score }}
+              </span>
+              <span v-if="place.notes" class="muted">{{ place.notes }}</span>
+              <button
+                class="secondary-button action-button"
+                type="button"
+                :disabled="assigningPlaceId === place.saved_place_id"
+                @click="assignSuggestedPlace(city, place)"
+              >
+                {{ assigningPlaceId === place.saved_place_id ? 'Assigning...' : `Assign to ${city.name}` }}
+              </button>
+            </article>
+          </div>
+        </div>
       </article>
 
       <article v-if="overview.unassigned_places.length" class="trip-planner-city trip-planner-city--muted">
@@ -81,8 +122,10 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import L from 'leaflet'
+import { useSavedStore } from '../stores/saved.js'
+import { useTripsStore } from '../stores/trips.js'
 
 const props = defineProps({
   overview: {
@@ -91,7 +134,12 @@ const props = defineProps({
   },
 })
 
+const savedStore = useSavedStore()
+const tripsStore = useTripsStore()
 const mapEl = ref(null)
+const assigningPlaceId = ref('')
+const cityNoteDrafts = reactive({})
+const cityFeedback = reactive({})
 const routeCities = computed(() =>
   (props.overview?.cities || []).filter((city) => city.lat !== null && city.lon !== null)
 )
@@ -101,6 +149,19 @@ const assignedPlaces = computed(() =>
 
 let map = null
 let layerGroup = null
+
+watch(
+  () => props.overview?.cities || [],
+  (cities) => {
+    for (const city of cities) {
+      cityNoteDrafts[city.id] = city.notes || ''
+      if (!(city.id in cityFeedback)) {
+        cityFeedback[city.id] = ''
+      }
+    }
+  },
+  { immediate: true, deep: true }
+)
 
 function humanizeStatus(status) {
   if (status === 'want_to_visit') return 'want to visit'
@@ -126,6 +187,28 @@ function placeColor(status) {
   if (status === 'favorite') return '#c86f31'
   if (status === 'visited') return '#0f5c52'
   return '#5b4a8a'
+}
+
+async function saveCityNotes(city) {
+  cityFeedback[city.id] = 'Saving notes...'
+  try {
+    await tripsStore.updateCity(props.overview.trip_id, city.id, {
+      notes: cityNoteDrafts[city.id] || null,
+    })
+    cityFeedback[city.id] = 'Notes saved.'
+  } catch (error) {
+    cityFeedback[city.id] = error.message || 'Save failed'
+  }
+}
+
+async function assignSuggestedPlace(city, place) {
+  assigningPlaceId.value = place.saved_place_id
+  try {
+    await savedStore.updateSaved(place.saved_place_id, { city_id: city.id })
+    await tripsStore.fetchTripOverview(props.overview.trip_id)
+  } finally {
+    assigningPlaceId.value = ''
+  }
 }
 
 async function renderMap() {

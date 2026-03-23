@@ -14,6 +14,8 @@ DEFAULT_PATHS = [
     "/api/map/places?limit=1",
     "/api/trips/",
     "/api/saves/",
+    "/api/admin/status",
+    "/api/admin/import-jobs",
     "/api/docs",
 ]
 

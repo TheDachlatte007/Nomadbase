@@ -18,10 +18,19 @@ class TripCityCreateRequest(BaseModel):
     country: str | None = Field(default=None, max_length=100)
     lat: float | None = None
     lon: float | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class TripCityReorderRequest(BaseModel):
     city_ids: list[str] = Field(min_length=1)
+
+
+class TripCityUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    country: str | None = Field(default=None, max_length=100)
+    lat: float | None = None
+    lon: float | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class TripParticipantCreateRequest(BaseModel):
@@ -43,6 +52,7 @@ class TripCityResponse(BaseModel):
     lat: float | None = None
     lon: float | None = None
     sort_order: int
+    notes: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
 
@@ -80,7 +90,10 @@ class TripOverviewCityResponse(BaseModel):
     favorite_count: int
     place_type_counts: dict[str, int]
     preview_places: list[str]
+    notes: str | None = None
+    highlights: list[str]
     places: list["TripOverviewPlaceResponse"]
+    suggested_unassigned_places: list["TripOverviewSuggestedPlaceResponse"]
 
 
 class TripOverviewPlaceResponse(BaseModel):
@@ -94,6 +107,18 @@ class TripOverviewPlaceResponse(BaseModel):
     lon: float
     city_id: str | None = None
     city_name: str | None = None
+
+
+class TripOverviewSuggestedPlaceResponse(BaseModel):
+    saved_place_id: str
+    place_id: str
+    name: str
+    place_type: str
+    status: str
+    notes: str | None = None
+    lat: float
+    lon: float
+    suggestion_score: int
 
 
 class TripOverviewResponse(BaseModel):

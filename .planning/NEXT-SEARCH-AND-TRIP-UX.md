@@ -75,10 +75,54 @@ Status:
 
 ## Next Recommended Build Order
 
-1. Trip planner follow-up: city highlights, city notes, and smarter unassigned-save suggestions.
-2. Import pipeline follow-up: background execution, retries, and maybe queueing if sync imports become painful.
-3. Smoke-test scripts can be extended with richer deployment assertions after each Portainer rollout.
-4. Optional live enrichment for weakly-described places via Wikipedia / Wikidata style context.
+1. Trip planner follow-up
+- Add city notes so each stop can hold intent, logistics, and reminders.
+- Add richer city highlights in the planner, not just counts.
+- Suggest likely city assignment targets for unassigned trip saves.
+- Keep the whole flow mobile-first and low-friction.
+
+2. Import pipeline follow-up
+- Keep the current synchronous import path, but harden the admin experience around it.
+- Improve visibility for recent import runs and make failure states clearer.
+- Leave background queueing as a later step unless sync imports become an actual pain point.
+
+3. Deploy and smoke-check follow-up
+- Extend the smoke script when useful, but keep it tiny and reliable.
+- Focus on checks that catch real Portainer regressions quickly.
+
+4. Optional enrichment later
+- Add external context only where the owned OSM dataset is weak.
+- Keep third-party lookups out of the hot path.
+
+## Sequential Execution Plan
+
+This is the current ordered work queue. Work should move top to bottom unless a blocker appears.
+
+### Item 1: Trip planner v1.1
+- City notes editable from the trip planner.
+- Better city-level summary cards.
+- Suggested placement for unassigned trip saves.
+- Success criteria:
+  - a city can store notes
+  - the planner shows those notes and stronger highlights
+  - unassigned trip saves are no longer just a flat bucket with no direction
+Status: done
+
+### Item 2: Import admin v1.1
+- Keep recent import jobs visible and easier to read.
+- Tighten import feedback and status language.
+- Success criteria:
+  - import runs are easy to inspect after the fact
+  - a failed import is obvious without opening logs
+Status: done
+
+### Item 3: Deploy guardrails
+- Expand smoke coverage only where it adds signal.
+- Keep docs aligned with the real rollout flow.
+- Success criteria:
+  - the deploy checklist stays short
+  - core alpha failures are quickly visible
+Status: done for the current alpha scope
 
 ## Constraints
 

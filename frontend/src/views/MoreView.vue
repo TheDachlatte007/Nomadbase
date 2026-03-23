@@ -85,8 +85,10 @@
               <span v-if="item.last_imported_at">· last import {{ formatTimestamp(item.last_imported_at) }}</span>
             </p>
           </div>
-          <div class="chip-row">
-            <span v-for="source in item.sources" :key="source" class="chip">{{ source }}</span>
+          <div class="entry-actions">
+            <div class="chip-row">
+              <span v-for="source in item.sources" :key="source" class="chip">{{ source }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -97,7 +99,12 @@
       <h3>See which import runs finished cleanly and which need another try.</h3>
       <div class="imports-list">
         <p v-if="!importJobs.length" class="empty-state">No import jobs recorded yet.</p>
-        <div v-for="job in importJobs" :key="job.id" class="import-item">
+        <div
+          v-for="job in importJobs"
+          :key="job.id"
+          class="import-item"
+          :class="{ 'import-item--failed': job.status === 'failed' }"
+        >
           <div>
             <strong>{{ job.region || job.city }}<span v-if="job.country">, {{ job.country }}</span></strong>
             <p class="muted">
@@ -105,10 +112,20 @@
               <span v-if="job.finished_at">→ {{ formatTimestamp(job.finished_at) }}</span>
             </p>
           </div>
-          <div class="chip-row">
-            <span class="chip" :class="{ 'chip--tag': job.status === 'failed' }">{{ job.status }}</span>
-            <span class="chip">{{ job.imported_count }} imported</span>
-            <span class="chip">{{ job.total_elements }} raw elements</span>
+          <div class="entry-actions">
+            <div class="chip-row">
+              <span class="chip" :class="{ 'chip--tag': job.status === 'failed' }">{{ job.status }}</span>
+              <span class="chip">{{ job.imported_count }} imported</span>
+              <span class="chip">{{ job.total_elements }} raw elements</span>
+            </div>
+            <button
+              class="secondary-button action-button"
+              type="button"
+              :disabled="importing"
+              @click="rerunImport(job)"
+            >
+              {{ importing ? 'Importing…' : 'Run again' }}
+            </button>
           </div>
           <p v-if="job.error" class="muted">{{ job.error }}</p>
         </div>
@@ -218,17 +235,27 @@ const importFeedback = ref('')
 const importText = computed(() => (importing.value ? 'Importing… (may take 60s)' : 'Import places'))
 
 async function onImport() {
+  await runImport(importForm.city, importForm.country || null, true)
+}
+
+async function runImport(city, country = null, resetForm = false) {
   importing.value = true
-  importFeedback.value = `Fetching OSM data for ${importForm.city}…`
+  importFeedback.value = `Fetching OSM data for ${city}…`
   try {
-    const result = await adminStore.importCity(importForm.city, importForm.country || null)
+    const result = await adminStore.importCity(city, country)
     importFeedback.value = `Done — ${result.imported} places imported for ${result.region}.`
-    importForm.city = ''
-    importForm.country = ''
+    if (resetForm) {
+      importForm.city = ''
+      importForm.country = ''
+    }
   } catch (e) {
     importFeedback.value = `Error: ${e.message}`
   } finally {
     importing.value = false
   }
+}
+
+async function rerunImport(job) {
+  await runImport(job.city, job.country || null, false)
 }
 </script>

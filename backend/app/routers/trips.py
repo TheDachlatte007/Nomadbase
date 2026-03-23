@@ -1,3 +1,4 @@
+import math
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,6 +17,7 @@ from app.models.trip_participant import TripParticipant
 from app.schemas.trip import (
     TripCityCreateRequest,
     TripCityReorderRequest,
+    TripCityUpdateRequest,
     TripCreateRequest,
     TripListResponse,
     TripOverviewResponse,
@@ -35,6 +37,82 @@ def _parse_uuid(value: str, field_name: str) -> UUID:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"{field_name} must be a valid UUID",
         ) from exc
+
+
+def _distance_km(
+    lat1: float | None,
+    lon1: float | None,
+    lat2: float | None,
+    lon2: float | None,
+) -> float | None:
+    if None in {lat1, lon1, lat2, lon2}:
+        return None
+
+    earth_radius_km = 6371.0
+    lat1_rad = math.radians(float(lat1))
+    lon1_rad = math.radians(float(lon1))
+    lat2_rad = math.radians(float(lat2))
+    lon2_rad = math.radians(float(lon2))
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2) ** 2
+    )
+    return earth_radius_km * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _suggest_place_for_city(city_entry: dict, place_payload: dict) -> int:
+    score = 0
+    region = (place_payload.get("region") or "").lower()
+    city_name = (city_entry.get("name") or "").lower()
+    country = (city_entry.get("country") or "").lower()
+
+    if city_name and city_name in region:
+        score += 110
+    if country and country in region:
+        score += 35
+
+    distance = _distance_km(
+        city_entry.get("lat"),
+        city_entry.get("lon"),
+        place_payload.get("lat"),
+        place_payload.get("lon"),
+    )
+    if distance is not None:
+        if distance <= 8:
+            score += 90
+        elif distance <= 25:
+            score += 60
+        elif distance <= 80:
+            score += 28
+
+    return score
+
+
+def _build_city_highlights(city_entry: dict) -> list[str]:
+    highlights: list[str] = []
+    if city_entry.get("saved_count"):
+        highlights.append(f"{city_entry['saved_count']} saved places in this stop")
+    if city_entry.get("favorite_count"):
+        highlights.append(f"{city_entry['favorite_count']} favorites already marked")
+    if city_entry.get("want_to_visit_count"):
+        highlights.append(f"{city_entry['want_to_visit_count']} still on the shortlist")
+
+    place_type_counts = city_entry.get("place_type_counts") or {}
+    if place_type_counts:
+        top_types = (
+            sorted(place_type_counts.items(), key=lambda item: (-item[1], item[0]))[:2]
+        )
+        highlights.append(
+            "Top categories: "
+            + " · ".join(f"{place_type} {count}" for place_type, count in top_types)
+        )
+
+    if city_entry.get("preview_places"):
+        highlights.append("Examples: " + " · ".join(city_entry["preview_places"][:3]))
+
+    return highlights[:4]
 
 
 async def _load_trip_payloads(
@@ -87,6 +165,7 @@ async def _load_trip_payloads(
                 func.ST_Y(City.location).label("lat"),
                 func.ST_X(City.location).label("lon"),
                 City.sort_order,
+                City.notes,
             )
             .where(City.trip_id.in_(ordered_trip_ids))
             .order_by(City.sort_order.asc(), City.created_at.asc(), City.name.asc())
@@ -101,6 +180,7 @@ async def _load_trip_payloads(
                 "lat": float(row.lat) if row.lat is not None else None,
                 "lon": float(row.lon) if row.lon is not None else None,
                 "sort_order": row.sort_order,
+                "notes": row.notes,
                 "created_at": row.created_at,
                 "updated_at": row.updated_at,
             }
@@ -178,6 +258,7 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
                 City.sort_order,
                 func.ST_Y(City.location).label("lat"),
                 func.ST_X(City.location).label("lon"),
+                City.notes,
             )
             .where(City.trip_id == trip_id)
             .order_by(City.sort_order.asc(), City.created_at.asc(), City.name.asc())
@@ -198,7 +279,10 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
             "favorite_count": 0,
             "place_type_counts": {},
             "preview_places": [],
+            "notes": row.notes,
+            "highlights": [],
             "places": [],
+            "suggested_unassigned_places": [],
         }
         for row in city_rows
     }
@@ -222,6 +306,7 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
                 SavedPlace.notes,
                 Place.place_type,
                 Place.name,
+                Place.region,
                 func.ST_Y(Place.location).label("lat"),
                 func.ST_X(Place.location).label("lon"),
             )
@@ -244,6 +329,7 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
             "place_type": row.place_type,
             "status": row.status,
             "notes": row.notes,
+            "region": row.region,
             "lat": float(row.lat),
             "lon": float(row.lon),
             "city_id": str(row.city_id) if row.city_id else None,
@@ -276,6 +362,36 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
 
     for city_entry in city_map.values():
         city_entry["preview_places"] = city_entry["preview_places"][:3]
+        city_entry["highlights"] = _build_city_highlights(city_entry)
+
+    for place_payload in unassigned_places:
+        scored = []
+        for city_entry in city_map.values():
+            suggestion_score = _suggest_place_for_city(city_entry, place_payload)
+            if suggestion_score > 0:
+                scored.append((suggestion_score, city_entry))
+
+        scored.sort(key=lambda item: item[0], reverse=True)
+        for suggestion_score, city_entry in scored[:3]:
+            city_entry["suggested_unassigned_places"].append(
+                {
+                    "saved_place_id": place_payload["saved_place_id"],
+                    "place_id": place_payload["place_id"],
+                    "name": place_payload["name"],
+                    "place_type": place_payload["place_type"],
+                    "status": place_payload["status"],
+                    "notes": place_payload["notes"],
+                    "lat": place_payload["lat"],
+                    "lon": place_payload["lon"],
+                    "suggestion_score": suggestion_score,
+                }
+            )
+
+    for city_entry in city_map.values():
+        unique_suggestions = {}
+        for item in city_entry["suggested_unassigned_places"]:
+            unique_suggestions[item["saved_place_id"]] = item
+        city_entry["suggested_unassigned_places"] = list(unique_suggestions.values())[:3]
 
     return {
         "trip_id": str(trip.id),
@@ -357,8 +473,35 @@ async def add_city_to_trip(
         country=payload.country,
         location=location,
         sort_order=next_sort_order,
+        notes=payload.notes,
     )
     db.add(city)
+    await db.commit()
+    return TripResponse(**await _load_trip_payload(db, trip_uuid))
+
+
+@router.patch("/{trip_id}/cities/{city_id}", response_model=TripResponse)
+async def update_trip_city(
+    trip_id: str,
+    city_id: str,
+    payload: TripCityUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    trip_uuid = _parse_uuid(trip_id, "trip_id")
+    city_uuid = _parse_uuid(city_id, "city_id")
+    city = await db.get(City, city_uuid)
+    if city is None or city.trip_id != trip_uuid:
+        raise HTTPException(status_code=404, detail="City not found")
+
+    if payload.name is not None:
+        city.name = payload.name
+    if payload.country is not None:
+        city.country = payload.country
+    if payload.notes is not None:
+        city.notes = payload.notes
+    if payload.lat is not None and payload.lon is not None:
+        city.location = WKTElement(f"POINT({payload.lon} {payload.lat})", srid=4326)
+
     await db.commit()
     return TripResponse(**await _load_trip_payload(db, trip_uuid))
 
