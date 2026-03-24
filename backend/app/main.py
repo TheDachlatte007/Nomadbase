@@ -2,7 +2,9 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.config import settings
 from app.routers import health, map, saves, trips, tracking, admin
 
@@ -14,13 +16,23 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
+allow_origins = settings.cors_allow_origins_list
+allow_all_origins = "*" in allow_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten in production
-    allow_credentials=True,
+    allow_origins=["*"] if allow_all_origins else allow_origins,
+    allow_credentials=not allow_all_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if settings.ENABLE_GZIP:
+    app.add_middleware(GZipMiddleware, minimum_size=1200)
+
+trusted_hosts = settings.trusted_hosts_list
+if trusted_hosts != ["*"]:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
 
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(map.router, prefix="/api/map", tags=["map"])

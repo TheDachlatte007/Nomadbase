@@ -25,13 +25,13 @@
           </p>
         </div>
         <button
-          v-if="overview.coverage_summary?.needs_import"
+          v-if="overview.coverage_summary?.needs_import || overview.coverage_summary?.refresh_recommended"
           class="action-button"
           type="button"
           :disabled="queueingAllImports || isRouteImporting"
           @click="queueMissingImports"
         >
-          {{ queueingAllImports ? 'Queueing imports...' : 'Import missing stops' }}
+          {{ queueingAllImports ? 'Queueing imports...' : 'Prep weak stops' }}
         </button>
       </div>
       <div class="trip-readiness-strip" :data-state="overview.coverage_summary?.route_readiness || 'needs_imports'">
@@ -43,6 +43,12 @@
         <span class="chip">{{ overview.coverage_summary?.usable || 0 }} usable</span>
         <span class="chip">{{ overview.coverage_summary?.thin || 0 }} thin</span>
         <span class="chip">{{ overview.coverage_summary?.missing || 0 }} missing</span>
+        <span v-if="overview.coverage_summary?.core_gap_cities" class="chip">
+          {{ overview.coverage_summary.core_gap_cities }} core gaps
+        </span>
+        <span v-if="overview.coverage_summary?.refresh_recommended" class="chip">
+          {{ overview.coverage_summary.refresh_recommended }} refresh suggested
+        </span>
         <span v-if="overview.coverage_summary?.queued_imports" class="chip">
           {{ overview.coverage_summary.queued_imports }} queued
         </span>
@@ -89,7 +95,7 @@
               <p class="muted">{{ city.coverage.summary }}</p>
             </div>
             <button
-              v-if="city.coverage.needs_import"
+              v-if="city.coverage.needs_import || city.coverage.refresh_recommended"
               class="secondary-button action-button"
               type="button"
               :disabled="queueingCityId === city.id || ['queued', 'running'].includes(city.coverage.active_import_status)"
@@ -102,7 +108,9 @@
                     ? 'Import running'
                     : city.coverage.active_import_status === 'queued'
                       ? 'Import queued'
-                      : 'Import city'
+                      : city.coverage.refresh_recommended
+                        ? 'Refresh city'
+                        : 'Import city'
               }}
             </button>
           </div>
@@ -110,15 +118,29 @@
             <span class="chip">{{ city.coverage.level }}</span>
             <span class="chip">{{ city.coverage.local_place_count }} local places</span>
             <span class="chip">{{ city.coverage.nearby_place_count }} nearby</span>
+            <span
+              v-for="dimension in city.coverage.missing_core_dimensions"
+              :key="`${city.id}-${dimension}`"
+              class="chip"
+            >
+              missing {{ dimension }}
+            </span>
+            <span v-if="city.coverage.refresh_recommended" class="chip">refresh suggested</span>
             <span v-if="city.coverage.active_import_status" class="chip">
               {{ city.coverage.active_import_status }}
             </span>
           </div>
+          <p v-if="coreCoverageLine(city.coverage)" class="muted">
+            {{ coreCoverageLine(city.coverage) }}
+          </p>
           <p v-if="city.coverage.active_import_created_at" class="muted">
             Import {{ city.coverage.active_import_status }} since {{ formatTimestamp(city.coverage.active_import_created_at) }}
           </p>
           <p v-if="city.coverage.last_imported_at" class="muted">
             Last imported {{ formatTimestamp(city.coverage.last_imported_at) }}
+            <template v-if="city.coverage.last_import_age_days !== null">
+              · {{ city.coverage.last_import_age_days }} day<span v-if="city.coverage.last_import_age_days !== 1">s</span> ago
+            </template>
           </p>
         </section>
 
@@ -290,10 +312,13 @@ const routeReadinessCopy = computed(() => {
   if (!summary) return ''
   switch (summary.route_readiness) {
     case 'ready':
-      return 'Every stop has at least usable local coverage already cached.'
+      return 'Every stop has usable local coverage, core trip categories, and fresh-enough imports.'
     case 'importing':
       return `${summary.queued_imports + summary.running_imports} stop import(s) are queued or running right now.`
     case 'partial':
+      if (summary.core_gap_cities || summary.refresh_recommended) {
+        return `${summary.core_gap_cities} stop(s) still miss route basics and ${summary.refresh_recommended} stop(s) would benefit from a refresh before departure.`
+      }
       if (summary.unmapped_cities) {
         return `${summary.unmapped_cities} stop(s) still need map coordinates, and ${summary.thin + summary.missing} stop(s) need stronger local coverage.`
       }
@@ -372,6 +397,20 @@ async function saveCityNotes(city) {
   }
 }
 
+function coreCoverageLine(coverage) {
+  if (!coverage) return ''
+  const parts = []
+  const labels = Object.entries(coverage.core_dimensions || {})
+    .map(([dimension, count]) => `${dimension} ${count}`)
+  if (labels.length) {
+    parts.push(`Core coverage: ${labels.join(' · ')}`)
+  }
+  if (coverage.stale_import) {
+    parts.push('Import snapshot is getting stale')
+  }
+  return parts.join('. ')
+}
+
 async function assignSuggestedPlace(city, place) {
   assigningPlaceId.value = place.saved_place_id
   try {
@@ -394,7 +433,7 @@ async function saveDiscoveryPlace(city, place) {
 
 async function queueMissingImports() {
   queueingAllImports.value = true
-  coverageFeedback.value = 'Queueing missing city imports...'
+  coverageFeedback.value = 'Queueing weak or stale city imports...'
   try {
     const payload = await tripsStore.queueCoverageImports(props.overview.trip_id)
     await tripsStore.fetchTripOverview(props.overview.trip_id)

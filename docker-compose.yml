@@ -27,7 +27,12 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+asyncpg://nomadbase@db:5432/nomadbase
+      APP_ENV: alpha
       DEBUG: "false"
+      CORS_ALLOW_ORIGINS: "*"
+      TRUSTED_HOSTS: "*"
+      ENABLE_GZIP: "true"
+      IMPORT_AUTO_QUEUE_ON_CITY_CREATE: "true"
     restart: unless-stopped
 
 volumes:

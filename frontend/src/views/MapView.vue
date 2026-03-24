@@ -67,6 +67,7 @@
               {{ tripOverview.route_label }}
               <span v-if="tripOverview.route_distance_km">· {{ Math.round(tripOverview.route_distance_km) }} km</span>
             </p>
+            <p v-if="routePrepHint" class="muted">{{ routePrepHint }}</p>
           </div>
           <div class="chip-row">
             <button
@@ -227,6 +228,22 @@ const resultMessage = computed(() => placesStore.message)
 const trips = computed(() => tripsStore.trips)
 const activeTrip = computed(() => tripsStore.activeTrip)
 const tripOverview = computed(() => tripsStore.tripOverview)
+const routePrepHint = computed(() => {
+  const summary = tripOverview.value?.coverage_summary
+  if (!summary) return ''
+  if (summary.route_readiness === 'ready') return 'Trip route looks ready for local discovery.'
+  if (summary.route_readiness === 'importing') {
+    return `${summary.queued_imports + summary.running_imports} route import(s) are still running.`
+  }
+  const detailParts = []
+  if (summary.core_gap_cities) detailParts.push(`${summary.core_gap_cities} stop(s) still miss route basics`)
+  if (summary.refresh_recommended) detailParts.push(`${summary.refresh_recommended} stop(s) would benefit from refresh`)
+  if (summary.unmapped_cities) detailParts.push(`${summary.unmapped_cities} stop(s) still need map coordinates`)
+  if (!detailParts.length && (summary.thin || summary.missing)) {
+    detailParts.push(`${summary.thin + summary.missing} stop(s) still need stronger local coverage`)
+  }
+  return detailParts.join(' · ')
+})
 const importedRegions = computed(() => {
   return (adminStore.imports || [])
     .map((item) => item.region)

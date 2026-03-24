@@ -15,6 +15,15 @@ None for the current alpha stack.
 
 The bundled Postgres service is configured for passwordless local alpha deployment so the stack can boot without extra setup.
 
+Optional hardening envs are now available if you expose the app beyond a throwaway LAN test:
+
+- `CORS_ALLOW_ORIGINS`
+- `TRUSTED_HOSTS`
+- `ENABLE_GZIP`
+- `IMPORT_AUTO_QUEUE_ON_CITY_CREATE`
+
+For example, a homeserver deploy can move from `*` to your real hostnames once the first stack is stable.
+
 ## Expected first-run behavior
 
 The app container runs:
@@ -70,8 +79,18 @@ For a real trip-prep flow, the first useful manual check is now:
 2. create one trip with 2-3 cities
 3. open the trip planner
 4. use `Import missing stops` if any city shows `thin` or `missing`
+   or `Prep weak stops` if the route looks stale or misses key trip categories
 5. wait for the background jobs to finish in Admin or on the planner
 6. confirm the map and planner start showing local suggestions for each stop
+
+Cities now also show whether they still miss core route categories:
+
+- `food`
+- `stay`
+- `essentials`
+- `transport`
+
+This matters because a city with many POIs can still feel weak for a real trip if it lacks basics like transport anchors or day-to-day places.
 
 ## Known limitations
 

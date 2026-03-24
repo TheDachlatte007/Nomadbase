@@ -147,9 +147,14 @@ class TripOverviewCityCoverageResponse(BaseModel):
     local_place_count: int
     region_match_count: int
     nearby_place_count: int
+    core_dimensions: dict[str, int]
+    missing_core_dimensions: list[str]
     import_region_hint: str
     summary: str
     needs_import: bool
+    refresh_recommended: bool
+    stale_import: bool
+    last_import_age_days: int | None = None
     last_imported_at: datetime | None = None
     active_import_job_id: str | None = None
     active_import_status: str | None = None
@@ -162,6 +167,8 @@ class TripOverviewCoverageSummaryResponse(BaseModel):
     thin: int
     missing: int
     needs_import: int
+    refresh_recommended: int
+    core_gap_cities: int
     unmapped_cities: int
     queued_imports: int
     running_imports: int

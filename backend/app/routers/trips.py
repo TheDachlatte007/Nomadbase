@@ -1,5 +1,6 @@
 import math
 import logging
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -7,6 +8,7 @@ from geoalchemy2 import WKTElement
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db import get_db
 from app.models.city import City
 from app.models.expense import Expense
@@ -30,7 +32,7 @@ from app.schemas.trip import (
     TripUpdateRequest,
 )
 from app.services.overpass import geocode_city
-from app.services.import_jobs import enqueue_import_jobs
+from app.services.import_jobs import enqueue_import_job, enqueue_import_jobs
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -47,6 +49,14 @@ DISCOVERY_TYPE_BONUSES = {
     "essentials": 12,
     "transport": 10,
 }
+
+CORE_TRIP_DIMENSIONS: dict[str, set[str]] = {
+    "food": {"restaurant", "cafe"},
+    "stay": {"stay"},
+    "essentials": {"essentials"},
+    "transport": {"transport"},
+}
+STALE_IMPORT_AFTER_DAYS = 21
 
 
 def _parse_uuid(value: str, field_name: str) -> UUID:
@@ -152,6 +162,8 @@ def _build_route_highlights(
     unassigned_saved_places: int,
     cities_without_places: int,
     cities_without_coordinates: int,
+    cities_missing_core_dimensions: int,
+    refresh_recommended: int,
     top_place_types: dict[str, int],
 ) -> list[str]:
     highlights = [f"{city_count} stops planned for {participant_count or 1} traveler(s)"]
@@ -166,6 +178,12 @@ def _build_route_highlights(
         highlights.append(f"{cities_without_places} stops still need their first shortlist")
     if cities_without_coordinates:
         highlights.append(f"{cities_without_coordinates} stops still need map coordinates")
+    if cities_missing_core_dimensions:
+        highlights.append(
+            f"{cities_missing_core_dimensions} stops still miss key trip categories like food, stay, essentials, or transport"
+        )
+    if refresh_recommended:
+        highlights.append(f"{refresh_recommended} stops should be refreshed before departure")
     if top_place_types:
         top_entries = sorted(
             top_place_types.items(), key=lambda item: (-item[1], item[0])
@@ -188,14 +206,40 @@ def _coverage_level(local_place_count: int) -> str:
     return "missing"
 
 
-def _build_coverage_summary(level: str, local_place_count: int, import_region_hint: str) -> str:
+def _core_dimension_counts(place_type_counts: dict[str, int]) -> dict[str, int]:
+    return {
+        dimension: sum(place_type_counts.get(place_type, 0) for place_type in place_types)
+        for dimension, place_types in CORE_TRIP_DIMENSIONS.items()
+    }
+
+
+def _build_coverage_summary(
+    level: str,
+    local_place_count: int,
+    import_region_hint: str,
+    *,
+    missing_core_dimensions: list[str],
+    stale_import: bool,
+) -> str:
     if level == "ready":
-        return f"{local_place_count} local places already cover {import_region_hint}."
-    if level == "usable":
-        return f"{local_place_count} local places exist for {import_region_hint}, enough for basic trip use."
-    if level == "thin":
-        return f"Only {local_place_count} local places are available for {import_region_hint}; importing more is recommended."
-    return f"No local places are cached for {import_region_hint} yet."
+        base = f"{local_place_count} local places already cover {import_region_hint}."
+    elif level == "usable":
+        base = f"{local_place_count} local places exist for {import_region_hint}, enough for basic trip use."
+    elif level == "thin":
+        base = f"Only {local_place_count} local places are available for {import_region_hint}; importing more is recommended."
+    else:
+        base = f"No local places are cached for {import_region_hint} yet."
+
+    notes: list[str] = []
+    if missing_core_dimensions:
+        notes.append("still missing " + ", ".join(missing_core_dimensions))
+    if stale_import:
+        notes.append("last import is getting stale")
+
+    if notes:
+        return base + " Route basics: " + " and ".join(notes) + "."
+
+    return base
 
 
 def _build_discovery_reason(
@@ -388,6 +432,24 @@ async def _load_city_coverage(db: AsyncSession, city_entry: dict) -> dict:
             or 0
         )
 
+    coverage_filters = []
+    if region_conditions:
+        coverage_filters.append(or_(*region_conditions))
+    if lat is not None and lon is not None:
+        city_point = WKTElement(f"POINT({lon} {lat})", srid=4326)
+        coverage_filters.append(func.ST_DistanceSphere(Place.location, city_point) <= 25000)
+
+    place_type_counts: dict[str, int] = {}
+    if coverage_filters:
+        coverage_rows = (
+            await db.execute(
+                select(Place.place_type, func.count(func.distinct(Place.id)))
+                .where(or_(*coverage_filters))
+                .group_by(Place.place_type)
+            )
+        ).all()
+        place_type_counts = {row[0]: int(row[1]) for row in coverage_rows if row[0]}
+
     last_imported_at = await db.scalar(
         select(func.max(ImportJob.finished_at)).where(
             ImportJob.status == "completed",
@@ -420,16 +482,44 @@ async def _load_city_coverage(db: AsyncSession, city_entry: dict) -> dict:
 
     local_place_count = max(region_match_count, nearby_place_count)
     level = _coverage_level(local_place_count)
+    core_dimensions = _core_dimension_counts(place_type_counts)
+    missing_core_dimensions = [
+        dimension for dimension, count in core_dimensions.items() if count == 0
+    ]
+    last_import_age_days = None
+    stale_import = False
+    if last_imported_at is not None:
+        if last_imported_at.tzinfo is None:
+            normalized_last_import = last_imported_at.replace(tzinfo=timezone.utc)
+        else:
+            normalized_last_import = last_imported_at.astimezone(timezone.utc)
+        last_import_age_days = max(
+            0,
+            (datetime.now(timezone.utc) - normalized_last_import).days,
+        )
+        stale_import = last_import_age_days >= STALE_IMPORT_AFTER_DAYS
     needs_import = level in {"thin", "missing"}
+    refresh_recommended = stale_import and not needs_import
 
     return {
         "level": level,
         "local_place_count": local_place_count,
         "region_match_count": region_match_count,
         "nearby_place_count": nearby_place_count,
+        "core_dimensions": core_dimensions,
+        "missing_core_dimensions": missing_core_dimensions,
         "import_region_hint": import_region_hint,
-        "summary": _build_coverage_summary(level, local_place_count, import_region_hint),
+        "summary": _build_coverage_summary(
+            level,
+            local_place_count,
+            import_region_hint,
+            missing_core_dimensions=missing_core_dimensions,
+            stale_import=stale_import,
+        ),
         "needs_import": needs_import,
+        "refresh_recommended": refresh_recommended,
+        "stale_import": stale_import,
+        "last_import_age_days": last_import_age_days,
         "last_imported_at": last_imported_at,
         "active_import_job_id": str(active_job.id) if active_job else None,
         "active_import_status": active_job.status if active_job else None,
@@ -723,6 +813,8 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
         "thin": 0,
         "missing": 0,
         "needs_import": 0,
+        "refresh_recommended": 0,
+        "core_gap_cities": 0,
         "unmapped_cities": 0,
         "queued_imports": 0,
         "running_imports": 0,
@@ -741,6 +833,10 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
         coverage_counts[city_entry["coverage"]["level"]] += 1
         if city_entry["coverage"]["needs_import"]:
             coverage_counts["needs_import"] += 1
+        if city_entry["coverage"]["refresh_recommended"]:
+            coverage_counts["refresh_recommended"] += 1
+        if city_entry["coverage"]["missing_core_dimensions"]:
+            coverage_counts["core_gap_cities"] += 1
         if city_entry["coverage"]["active_import_status"] == "queued":
             coverage_counts["queued_imports"] += 1
         elif city_entry["coverage"]["active_import_status"] == "running":
@@ -752,6 +848,8 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
         coverage_counts["missing"] == 0
         and coverage_counts["thin"] == 0
         and coverage_counts["unmapped_cities"] == 0
+        and coverage_counts["core_gap_cities"] == 0
+        and coverage_counts["refresh_recommended"] == 0
     ):
         coverage_counts["route_readiness"] = "ready"
     elif coverage_counts["running_imports"] or coverage_counts["queued_imports"]:
@@ -809,6 +907,8 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
             unassigned_saved_places=unassigned_saved_places,
             cities_without_places=cities_without_places,
             cities_without_coordinates=cities_without_coordinates,
+            cities_missing_core_dimensions=coverage_counts["core_gap_cities"],
+            refresh_recommended=coverage_counts["refresh_recommended"],
             top_place_types=assigned_place_type_totals,
         ),
         "coverage_summary": coverage_counts,
@@ -859,6 +959,7 @@ async def delete_trip(trip_id: str, db: AsyncSession = Depends(get_db)):
 async def add_city_to_trip(
     trip_id: str,
     payload: TripCityCreateRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     trip_uuid = _parse_uuid(trip_id, "trip_id")
@@ -891,6 +992,13 @@ async def add_city_to_trip(
     )
     db.add(city)
     await db.commit()
+    if settings.IMPORT_AUTO_QUEUE_ON_CITY_CREATE:
+        await enqueue_import_job(
+            db,
+            background_tasks,
+            city=payload.name,
+            country=payload.country,
+        )
     return TripResponse(**await _load_trip_payload(db, trip_uuid))
 
 
@@ -1102,7 +1210,7 @@ async def queue_trip_coverage_imports(
                 "lon": float(row.lon) if row.lon is not None else None,
             },
         )
-        if selected_ids or coverage["needs_import"]:
+        if selected_ids or coverage["needs_import"] or coverage["refresh_recommended"]:
             cities_to_queue.append((row.name, row.country))
 
     if not cities_to_queue:
@@ -1110,7 +1218,7 @@ async def queue_trip_coverage_imports(
             data=[],
             queued_count=0,
             reused_count=0,
-            message="All trip cities already have usable local coverage",
+            message="All trip cities already have usable and fresh-enough local coverage",
         )
 
     jobs, queued_count = await enqueue_import_jobs(db, background_tasks, cities_to_queue)
@@ -1134,7 +1242,7 @@ async def queue_trip_coverage_imports(
         data=data,
         queued_count=queued_count,
         reused_count=reused_count,
-        message="Trip coverage imports queued"
+        message="Trip prep imports queued"
         if queued_count
         else "Existing import jobs already cover the requested trip cities",
     )

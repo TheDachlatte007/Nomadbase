@@ -210,3 +210,32 @@ Status: done
   - route planning does not rely on a lucky narrow import set
   - the local database becomes progressively more useful per trip
 Status: done
+
+## Follow-up Queue
+
+This is the next compact queue after the baseline hardening sprint.
+It keeps the same rule: practical trip readiness first, no big-bang rewrites.
+
+### Item 12: Core trip coverage
+- Make route readiness care about trip basics, not only total POI counts.
+- Track whether each city has enough local `food`, `stay`, `essentials`, and `transport` coverage.
+- Success criteria:
+  - the planner can show which cities still miss practical route basics
+  - route readiness stops overstating quality when a city has many POIs but poor trip utility
+Status: done
+
+### Item 13: Import preparation automation
+- Move import queueing closer to the trip workflow itself.
+- Auto-queue imports when a new city is added and allow the planner to prep stale or weak stops in one step.
+- Success criteria:
+  - city creation does not depend on a frontend-only side effect to start local data prep
+  - the trip planner can prep weak or stale stops quickly before departure
+Status: done
+
+### Item 14: Homeserver deploy defaults
+- Add the first meaningful deploy knobs without making the alpha stack painful.
+- Keep permissive defaults for local alpha, but support tightening CORS and trusted hosts for real self-hosting.
+- Success criteria:
+  - deploy docs and env examples match the actual app behavior
+  - the app can be hardened for a homeserver without code edits
+Status: done

@@ -90,12 +90,6 @@ export const useTripsStore = defineStore('trips', () => {
     if (activeTripId.value === tripId) {
       await fetchTripOverview(tripId)
     }
-
-    fetch('/api/admin/imports', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ city: data.name, country: data.country || null }),
-    }).catch(() => {})
   }
 
   async function removeCity(tripId, cityId) {
