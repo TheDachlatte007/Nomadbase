@@ -34,4 +34,20 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // MapLibre is intentionally isolated into its own lazy vendor chunk.
+    // The chunk is large because it includes the WebGL map runtime, but it is
+    // not part of the initial app shell anymore, so the warning threshold
+    // should reflect that deliberate architecture instead of reporting noise.
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('maplibre-gl')) {
+            return 'map-vendor'
+          }
+        },
+      },
+    },
+  },
 })
