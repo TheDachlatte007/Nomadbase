@@ -257,3 +257,20 @@ Status: done
   - moving the map can reload places for the current view
   - route-oriented map exploration gets tighter without abandoning the owned dataset
 Status: done
+
+### Item 17: Trip readiness preflight
+- Turn the route overview into a real pre-trip checklist instead of just a route summary.
+- Make blockers, next steps, and route-prep actions visible where trip planning already happens.
+- Success criteria:
+  - each active trip exposes a clear readiness state for the first real trip run
+  - planner and map flows can queue route prep directly without admin detours
+  - the pre-trip story is visible on mobile without opening several screens
+Status: done
+
+### Item 18: Daily-use tracking polish
+- Remove a bit more friction from the expense flow the user will hit on the road every day.
+- Add low-friction presets for common categories and shared-split shortcuts.
+- Success criteria:
+  - the expense form is quicker to fill on mobile
+  - payer and split controls feel less fiddly in repeated daily use
+Status: done

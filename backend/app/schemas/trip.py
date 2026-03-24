@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date as date_type, datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -37,6 +37,7 @@ class TripCityUpdateRequest(BaseModel):
 
 class TripCoverageImportRequest(BaseModel):
     city_ids: list[str] = Field(default_factory=list)
+    mode: Literal["auto", "all", "missing", "refresh"] = "auto"
 
 
 class TripParticipantCreateRequest(BaseModel):
@@ -175,6 +176,15 @@ class TripOverviewCoverageSummaryResponse(BaseModel):
     route_readiness: str
 
 
+class TripOverviewReadinessResponse(BaseModel):
+    status: str
+    summary: str
+    trip_window_label: str
+    days_until_start: int | None = None
+    blockers: list[str]
+    next_steps: list[str]
+
+
 class TripOverviewResponse(BaseModel):
     trip_id: str
     trip_name: str
@@ -189,6 +199,7 @@ class TripOverviewResponse(BaseModel):
     cities_without_coordinates: int
     route_highlights: list[str]
     coverage_summary: TripOverviewCoverageSummaryResponse
+    readiness: TripOverviewReadinessResponse
     cities: list[TripOverviewCityResponse]
     unassigned_places: list[TripOverviewPlaceResponse]
 

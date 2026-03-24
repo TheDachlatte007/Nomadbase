@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Follow-up queue items 15-16 are complete
-last_updated: "2026-03-24T16:10:00+01:00"
-last_activity: 2026-03-24 — The map stack moved to MapLibre and place discovery can now follow the active viewport
+stopped_at: Follow-up queue items 15-18 are complete
+last_updated: "2026-03-24T18:20:00+01:00"
+last_activity: 2026-03-24 — Added trip readiness preflight and faster daily-use trip actions
 progress:
   total_phases: 5
   completed_phases: 0
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** A single app that answers: Where am I? What's around me? What do I want to see? What have I planned? What have I visited? What have I spent?
-**Current focus:** The map architecture is now materially closer to the target product; the next block should focus on deeper data and live deploy validation rather than more map churn
+**Current focus:** The first-trip baseline is now much more coherent; the next block should focus on deeper data and live deploy validation rather than more UI churn
 
 ## Current Position
 
-Phase: Map architecture refresh complete for the current queue
+Phase: First-trip polish complete for the current queue
 Plan: Create the next larger product block around deeper import/data quality and live deployment validation
 Status: In progress
-Last activity: 2026-03-24 — MapLibre replaced Leaflet for the main map surfaces and map queries became viewport-aware
+Last activity: 2026-03-24 — Trips gained explicit readiness/preflight state and tracking got daily-use shortcuts
 
-Progress: [██████████] 100% for the current map refresh queue
+Progress: [██████████] 100% for the current first-trip polish queue
 
 ## Performance Metrics
 
@@ -86,6 +86,9 @@ Recent decisions affecting current work:
 - Trip cities now try to geocode themselves automatically, which makes route distance, planner maps, and city-level coverage more dependable without manual coordinates.
 - The map stack now uses MapLibre instead of Leaflet for both the discovery map and the trip planner map.
 - Discovery queries can now be scoped to the active map viewport, which is a better fit for larger owned place datasets.
+- Active trips now expose a readiness/preflight layer with blockers, next steps, and direct route-prep actions.
+- The map can now trigger route prep directly from the active route strip.
+- Tracking now has faster category presets and a payer-only split shortcut for repeated daily entry.
 - Imports are now backgrounded and traceable, and new trip cities can auto-queue their first import, but they still depend on Overpass/Nominatim availability and app-process uptime.
 - There is still no separate worker or retry queue yet; jobs run inside the app process for alpha simplicity.
 - Local Docker validation is currently blocked by Docker Desktop returning `500 Internal Server Error` on daemon API calls.

@@ -16,6 +16,62 @@
       </span>
     </div>
 
+    <section class="trip-preflight-card" :data-status="overview.readiness?.status || 'setup_needed'">
+      <div class="stack-between stack-between--tight">
+        <div>
+          <p class="card-eyebrow">Pre-trip check</p>
+          <h4>{{ preflightTitle }}</h4>
+          <p class="muted">{{ overview.readiness?.summary }}</p>
+        </div>
+        <div class="trip-preflight-meta">
+          <strong>{{ overview.readiness?.trip_window_label || 'No travel dates set yet' }}</strong>
+          <span v-if="countdownLabel" class="muted">{{ countdownLabel }}</span>
+        </div>
+      </div>
+
+      <div v-if="overview.readiness?.blockers?.length" class="preflight-list">
+        <article
+          v-for="item in overview.readiness.blockers"
+          :key="item"
+          class="preflight-item preflight-item--blocker"
+        >
+          {{ item }}
+        </article>
+      </div>
+
+      <div v-if="overview.readiness?.next_steps?.length" class="preflight-list">
+        <article
+          v-for="item in overview.readiness.next_steps"
+          :key="item"
+          class="preflight-item"
+        >
+          {{ item }}
+        </article>
+      </div>
+
+      <div class="trip-actions">
+        <button
+          v-if="overview.cities?.length"
+          class="action-button"
+          type="button"
+          :disabled="queueingAllImports || isRouteImporting"
+          @click="queueMissingImports"
+        >
+          {{ queueingAllImports ? 'Queueing imports...' : 'Prep weak stops' }}
+        </button>
+        <button
+          v-if="overview.cities?.length"
+          class="secondary-button action-button"
+          type="button"
+          :disabled="queueingRefreshAll"
+          @click="queueFullRefresh"
+        >
+          {{ queueingRefreshAll ? 'Refreshing route...' : 'Refresh all route stops' }}
+        </button>
+      </div>
+      <p v-if="coverageFeedback" class="feedback">{{ coverageFeedback }}</p>
+    </section>
+
     <section class="coverage-summary-card">
       <div class="stack-between stack-between--tight">
         <div>
@@ -290,6 +346,7 @@ const assigningPlaceId = ref('')
 const savingDiscoveryId = ref('')
 const queueingCityId = ref('')
 const queueingAllImports = ref(false)
+const queueingRefreshAll = ref(false)
 const coverageFeedback = ref('')
 const cityNoteDrafts = reactive({})
 const cityFeedback = reactive({})
@@ -336,6 +393,24 @@ const routeReadinessCopy = computed(() => {
         return `${summary.unmapped_cities} stop(s) still need map coordinates before the route can feel reliable.`
       }
       return 'Queue the missing stops so the trip works more reliably on the road.'
+  }
+})
+const countdownLabel = computed(() => {
+  const days = props.overview?.readiness?.days_until_start
+  if (days === null || days === undefined) return ''
+  if (days > 1) return `${days} days until departure`
+  if (days === 1) return '1 day until departure'
+  if (days === 0) return 'Trip starts today'
+  return 'Trip already underway'
+})
+const preflightTitle = computed(() => {
+  switch (props.overview?.readiness?.status) {
+    case 'ready':
+      return 'This trip looks ready for the road.'
+    case 'almost_ready':
+      return 'This trip is close to ready.'
+    default:
+      return 'This trip still needs a few setup steps.'
   }
 })
 
@@ -448,7 +523,7 @@ async function queueMissingImports() {
   queueingAllImports.value = true
   coverageFeedback.value = 'Queueing weak or stale city imports...'
   try {
-    const payload = await tripsStore.queueCoverageImports(props.overview.trip_id)
+    const payload = await tripsStore.queueCoverageImports(props.overview.trip_id, [], 'auto')
     await tripsStore.fetchTripOverview(props.overview.trip_id)
     coverageFeedback.value = buildCoverageFeedback(payload)
   } catch (error) {
@@ -458,11 +533,25 @@ async function queueMissingImports() {
   }
 }
 
+async function queueFullRefresh() {
+  queueingRefreshAll.value = true
+  coverageFeedback.value = 'Refreshing the whole route cache...'
+  try {
+    const payload = await tripsStore.queueCoverageImports(props.overview.trip_id, [], 'all')
+    await tripsStore.fetchTripOverview(props.overview.trip_id)
+    coverageFeedback.value = buildCoverageFeedback(payload)
+  } catch (error) {
+    coverageFeedback.value = error.message || 'Route refresh failed'
+  } finally {
+    queueingRefreshAll.value = false
+  }
+}
+
 async function queueCityImport(city) {
   queueingCityId.value = city.id
   coverageFeedback.value = `Queueing import for ${city.name}...`
   try {
-    const payload = await tripsStore.queueCoverageImports(props.overview.trip_id, [city.id])
+    const payload = await tripsStore.queueCoverageImports(props.overview.trip_id, [city.id], 'refresh')
     await tripsStore.fetchTripOverview(props.overview.trip_id)
     coverageFeedback.value = buildCoverageFeedback(payload)
   } catch (error) {

@@ -709,13 +709,53 @@ code {
 }
 
 .coverage-summary-card,
-.city-coverage-card {
+.city-coverage-card,
+.trip-preflight-card {
   display: grid;
   gap: 10px;
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.62);
+}
+
+.trip-preflight-card[data-status="setup_needed"] {
+  border-color: rgba(200, 111, 49, 0.28);
+  background: linear-gradient(135deg, rgba(255, 243, 232, 0.96), rgba(255, 249, 240, 0.82));
+}
+
+.trip-preflight-card[data-status="almost_ready"] {
+  border-color: rgba(15, 92, 82, 0.16);
+  background: linear-gradient(135deg, rgba(255, 249, 240, 0.92), rgba(215, 235, 231, 0.52));
+}
+
+.trip-preflight-card[data-status="ready"] {
+  border-color: rgba(15, 92, 82, 0.24);
+  background: rgba(215, 235, 231, 0.28);
+}
+
+.trip-preflight-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.preflight-list {
+  display: grid;
+  gap: 8px;
+}
+
+.preflight-item {
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.68);
+  overflow-wrap: anywhere;
+}
+
+.preflight-item--blocker {
+  border-color: rgba(200, 111, 49, 0.26);
+  background: rgba(255, 243, 232, 0.88);
 }
 
 .trip-readiness-strip {
@@ -738,7 +778,9 @@ code {
 }
 
 .trip-readiness-strip[data-state="needs_imports"],
-.trip-readiness-strip[data-state="partial"] {
+.trip-readiness-strip[data-state="partial"],
+.trip-readiness-strip[data-state="setup_needed"],
+.trip-readiness-strip[data-state="almost_ready"] {
   border-color: rgba(200, 111, 49, 0.26);
   background: rgba(255, 243, 232, 0.82);
 }
@@ -907,6 +949,11 @@ code {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.tracking-preset-button {
+  width: auto;
+  padding: 0.58rem 0.8rem;
 }
 
 .saved-card-controls {

@@ -88,6 +88,22 @@
                 </p>
               </div>
 
+              <div class="trip-readiness-strip" :data-state="overview.readiness?.status || 'setup_needed'">
+                <strong>{{ overview.readiness?.trip_window_label || 'No travel dates set yet' }}</strong>
+                <span>{{ overview.readiness?.summary }}</span>
+                <span v-if="overview.readiness?.days_until_start !== null && overview.readiness?.days_until_start !== undefined">
+                  {{
+                    overview.readiness.days_until_start > 1
+                      ? `${overview.readiness.days_until_start} days until departure`
+                      : overview.readiness.days_until_start === 1
+                        ? '1 day until departure'
+                        : overview.readiness.days_until_start === 0
+                          ? 'Trip starts today'
+                          : 'Trip already underway'
+                  }}
+                </span>
+              </div>
+
               <div class="summary-list">
                 <article class="summary-item">
                   <strong>{{ overview.city_count }}</strong>

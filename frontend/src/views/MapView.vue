@@ -69,7 +69,16 @@
             </p>
             <p v-if="routePrepHint" class="muted">{{ routePrepHint }}</p>
           </div>
-          <div class="chip-row">
+          <div class="trip-actions">
+            <button
+              v-if="showRoutePrepButton"
+              class="secondary-button action-button"
+              type="button"
+              :disabled="routePrepLoading"
+              @click="onPrepRoute"
+            >
+              {{ routePrepLoading ? 'Preparing route...' : 'Prep route' }}
+            </button>
             <button
               v-for="city in tripOverview.cities"
               :key="city.id"
@@ -81,6 +90,7 @@
             </button>
           </div>
         </div>
+        <p v-if="tripOverview?.cities?.length && importFeedback" class="feedback">{{ importFeedback }}</p>
         <div class="tag-filter-row">
           <span
             v-for="chip in TAG_CHIPS"
@@ -253,6 +263,11 @@ const routePrepHint = computed(() => {
   }
   return detailParts.join(' · ')
 })
+const showRoutePrepButton = computed(() => {
+  const summary = tripOverview.value?.coverage_summary
+  if (!summary) return false
+  return Boolean(summary.needs_import || summary.refresh_recommended || summary.core_gap_cities)
+})
 const importedRegions = computed(() => {
   return (adminStore.imports || [])
     .map((item) => item.region)
@@ -269,6 +284,7 @@ const nearMeLoading = ref(false)
 const mapEl = ref(null)
 const importing = ref(false)
 const importFeedback = ref('')
+const routePrepLoading = ref(false)
 
 const TAG_CHIPS = [
   { key: 'vegan', label: 'Vegan' },
@@ -871,6 +887,22 @@ async function onInlineImport() {
     importFeedback.value = `Import failed: ${error.message}`
   } finally {
     importing.value = false
+  }
+}
+
+async function onPrepRoute() {
+  if (!selectedTripId.value || routePrepLoading.value) return
+  routePrepLoading.value = true
+  importFeedback.value = 'Queueing route prep imports...'
+  try {
+    const payload = await tripsStore.queueCoverageImports(selectedTripId.value, [], 'auto')
+    await tripsStore.fetchTripOverview(selectedTripId.value).catch(() => {})
+    await adminStore.fetchImports().catch(() => {})
+    importFeedback.value = payload?.message || 'Route prep imports queued.'
+  } catch (error) {
+    importFeedback.value = error.message || 'Route prep failed'
+  } finally {
+    routePrepLoading.value = false
   }
 }
 

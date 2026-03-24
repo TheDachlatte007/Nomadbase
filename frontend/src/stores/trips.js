@@ -166,11 +166,11 @@ export const useTripsStore = defineStore('trips', () => {
     }
   }
 
-  async function queueCoverageImports(tripId, cityIds = []) {
+  async function queueCoverageImports(tripId, cityIds = [], mode = 'auto') {
     const res = await fetch(`/api/trips/${tripId}/coverage/imports`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ city_ids: cityIds }),
+      body: JSON.stringify({ city_ids: cityIds, mode }),
     })
     if (!res.ok) throw new Error(await readError(res, 'Queue imports failed'))
     const payload = await res.json()

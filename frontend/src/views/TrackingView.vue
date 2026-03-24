@@ -147,6 +147,18 @@
                 >
               </div>
 
+              <div class="chip-row">
+                <button
+                  v-for="preset in EXPENSE_CATEGORY_PRESETS"
+                  :key="preset"
+                  class="secondary-button action-button tracking-preset-button"
+                  type="button"
+                  @click="applyCategoryPreset(preset)"
+                >
+                  {{ preset }}
+                </button>
+              </div>
+
               <select v-model="expForm.place_id" :disabled="!activeTrip">
                 <option value="">Optional place</option>
                 <option v-for="place in allPlaces" :key="place.id" :value="place.id">
@@ -184,6 +196,9 @@
                   <div class="trip-actions">
                     <button class="secondary-button action-button" type="button" @click="selectAllParticipants">
                       Select all
+                    </button>
+                    <button class="secondary-button action-button" type="button" @click="splitWithPayerOnly">
+                      Payer only
                     </button>
                     <button class="secondary-button action-button" type="button" @click="clearSplitParticipants">
                       Clear
@@ -410,6 +425,7 @@ import { useSavedStore } from '../stores/saved.js'
 import { useTrackingStore } from '../stores/tracking.js'
 import { useTripsStore } from '../stores/trips.js'
 
+const EXPENSE_CATEGORY_PRESETS = ['Food', 'Transport', 'Stay', 'Groceries', 'Tickets']
 const route = useRoute()
 const placesStore = usePlacesStore()
 const savedStore = useSavedStore()
@@ -588,8 +604,17 @@ function selectAllParticipants() {
   expForm.split_participant_ids = activeParticipants.value.map((participant) => participant.id)
 }
 
+function splitWithPayerOnly() {
+  if (!expForm.paid_by_participant_id) return
+  expForm.split_participant_ids = [expForm.paid_by_participant_id]
+}
+
 function clearSplitParticipants() {
   expForm.split_participant_ids = []
+}
+
+function applyCategoryPreset(preset) {
+  expForm.category = preset
 }
 
 function resetExpenseForm() {

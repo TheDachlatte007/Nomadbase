@@ -196,6 +196,91 @@ def _build_route_highlights(
     return highlights[:5]
 
 
+def _format_trip_day_label(value) -> str:
+    return value.strftime("%b %d").replace(" 0", " ")
+
+
+def _build_trip_readiness(
+    *,
+    trip: Trip,
+    city_count: int,
+    participant_count: int,
+    total_saved_places: int,
+    unassigned_saved_places: int,
+    coverage_counts: dict[str, int],
+    cities_without_coordinates: int,
+) -> dict:
+    blockers: list[str] = []
+    next_steps: list[str] = []
+    today = datetime.now(timezone.utc).date()
+    days_until_start = None
+
+    if trip.start_date and trip.end_date:
+        trip_window_label = (
+            f"{_format_trip_day_label(trip.start_date)} to {_format_trip_day_label(trip.end_date)}"
+        )
+    elif trip.start_date:
+        trip_window_label = f"Starts {_format_trip_day_label(trip.start_date)}"
+    elif trip.end_date:
+        trip_window_label = f"Until {_format_trip_day_label(trip.end_date)}"
+    else:
+        trip_window_label = "No travel dates set yet"
+
+    if trip.start_date:
+        days_until_start = (trip.start_date - today).days
+
+    if city_count == 0:
+        blockers.append("Add at least one city so the trip has a route to prepare.")
+    if participant_count == 0:
+        blockers.append("Add the travel crew so shared expenses and settlements work.")
+    if cities_without_coordinates:
+        blockers.append(
+            f"{cities_without_coordinates} stop(s) still need map coordinates for route guidance."
+        )
+
+    weak_city_count = coverage_counts["thin"] + coverage_counts["missing"]
+    if weak_city_count:
+        blockers.append(
+            f"{weak_city_count} stop(s) still need stronger local place coverage before departure."
+        )
+
+    if coverage_counts["core_gap_cities"]:
+        next_steps.append(
+            f"Fill route basics for {coverage_counts['core_gap_cities']} stop(s): food, stay, essentials, or transport."
+        )
+    if coverage_counts["refresh_recommended"]:
+        next_steps.append(
+            f"Refresh {coverage_counts['refresh_recommended']} stop(s) so older imports do not go stale."
+        )
+    if unassigned_saved_places:
+        next_steps.append(
+            f"Assign {unassigned_saved_places} saved place(s) to a city so the route stays organized."
+        )
+    if total_saved_places == 0 and city_count:
+        next_steps.append(
+            "Save a first shortlist per city so the trip is useful without thinking on the road."
+        )
+
+    if blockers:
+        status = "setup_needed"
+        summary = "This trip still needs a few setup steps before it feels dependable on the road."
+    elif next_steps:
+        status = "almost_ready"
+        summary = "The trip is usable already, but a few prep steps would make it smoother during the journey."
+    else:
+        status = "ready"
+        summary = "Cities, crew, and local coverage look good for the first real trip run."
+
+    return {
+        "status": status,
+        "summary": summary,
+        "trip_window_label": trip_window_label,
+        "days_until_start": days_until_start,
+        "blockers": blockers,
+        "next_steps": next_steps[:4],
+    }
+
+
 def _coverage_level(local_place_count: int) -> str:
     if local_place_count >= 120:
         return "ready"
@@ -912,6 +997,15 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
             top_place_types=assigned_place_type_totals,
         ),
         "coverage_summary": coverage_counts,
+        "readiness": _build_trip_readiness(
+            trip=trip,
+            city_count=len(city_rows),
+            participant_count=participant_count,
+            total_saved_places=total_saved_places,
+            unassigned_saved_places=unassigned_saved_places,
+            coverage_counts=coverage_counts,
+            cities_without_coordinates=cities_without_coordinates,
+        ),
         "cities": [city_map[row.id] for row in city_rows],
         "unassigned_places": unassigned_places,
     }
@@ -1196,6 +1290,7 @@ async def queue_trip_coverage_imports(
 
     selected_ids = {_parse_uuid(city_id, "city_id") for city_id in payload.city_ids}
     cities_to_queue: list[tuple[str, str | None]] = []
+    mode = payload.mode or "auto"
 
     for row in city_rows:
         if selected_ids and row.id not in selected_ids:
@@ -1210,7 +1305,17 @@ async def queue_trip_coverage_imports(
                 "lon": float(row.lon) if row.lon is not None else None,
             },
         )
-        if selected_ids or coverage["needs_import"] or coverage["refresh_recommended"]:
+        should_queue = False
+        if mode == "all":
+            should_queue = True
+        elif mode == "missing":
+            should_queue = coverage["needs_import"]
+        elif mode == "refresh":
+            should_queue = coverage["needs_import"] or coverage["refresh_recommended"]
+        else:
+            should_queue = bool(selected_ids) or coverage["needs_import"] or coverage["refresh_recommended"]
+
+        if should_queue:
             cities_to_queue.append((row.name, row.country))
 
     if not cities_to_queue:
@@ -1218,7 +1323,7 @@ async def queue_trip_coverage_imports(
             data=[],
             queued_count=0,
             reused_count=0,
-            message="All trip cities already have usable and fresh-enough local coverage",
+            message="All requested trip cities already have usable and fresh-enough local coverage",
         )
 
     jobs, queued_count = await enqueue_import_jobs(db, background_tasks, cities_to_queue)
@@ -1238,11 +1343,15 @@ async def queue_trip_coverage_imports(
         for job in jobs
     ]
     reused_count = len(jobs) - queued_count
+    action_message = {
+        "all": "Full route prep imports queued",
+        "missing": "Weak route stops queued",
+        "refresh": "Weak or stale route stops queued",
+        "auto": "Trip prep imports queued",
+    }.get(mode, "Trip prep imports queued")
     return TripCoverageImportResponse(
         data=data,
         queued_count=queued_count,
         reused_count=reused_count,
-        message="Trip prep imports queued"
-        if queued_count
-        else "Existing import jobs already cover the requested trip cities",
+        message=action_message if queued_count else "Existing import jobs already cover the requested trip cities",
     )

@@ -67,7 +67,7 @@ The repo now contains a working alpha data flow for `places` and `saves`, includ
 **Plans**: TBD
 
 Current reality note:
-Trip creation, ordered city routes, participant management, city-assigned trip saves, route summaries, city-level discovery suggestions, per-stop coverage/import readiness, route-level readiness status, and automatic city geocoding are now live in alpha form. New trip cities can also auto-queue their first import from the backend, which makes route prep less fragile across clients. The map page now reflects the active route directly on top of the MapLibre surface, and the trip planner uses the same map stack. The biggest open pieces are deeper import quality, broader data coverage, and later search/import depth.
+Trip creation, ordered city routes, participant management, city-assigned trip saves, route summaries, city-level discovery suggestions, per-stop coverage/import readiness, route-level readiness status, explicit trip preflight, and automatic city geocoding are now live in alpha form. New trip cities can also auto-queue their first import from the backend, which makes route prep less fragile across clients. The map page now reflects the active route directly on top of the MapLibre surface, can queue route prep directly, and the trip planner uses the same map stack. The biggest open pieces are deeper import quality, broader data coverage, and later search/import depth.
 
 ### Phase 4: Tracking
 **Goal**: Users can record what they spend and where they go, and see a summary of expenses by category
@@ -80,7 +80,7 @@ Trip creation, ordered city routes, participant management, city-assigned trip s
 **Plans**: TBD
 
 Current reality note:
-The alpha now supports expense creation, visit logging, recent activity lists, category totals, settlement suggestions, and trip-wide re-splitting when participants change later. Follow-up work should focus on richer filters and better linking back into trips and cities.
+The alpha now supports expense creation, visit logging, recent activity lists, category totals, settlement suggestions, trip-wide re-splitting when participants change later, and faster daily-use expense entry through category presets and payer/split shortcuts. Follow-up work should focus on richer filters and better linking back into trips and cities.
 
 ### Phase 5: Admin
 **Goal**: Users can manage OSM data imports, monitor system health, and configure personal preferences
