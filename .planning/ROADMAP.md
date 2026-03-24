@@ -53,7 +53,7 @@ The repository already contains a partial backend scaffold for 01-01, but there 
 **Plans**: TBD
 
 Current reality note:
-The repo now contains a working alpha data flow for `places` and `saves`, including seeded sample places, stronger server-side ranking for intent queries, note/status persistence, and trip-driven coverage awareness for route stops. The missing pieces are the eventual MapLibre surface and deeper enrichment/import depth.
+The repo now contains a working alpha data flow for `places` and `saves`, including seeded sample places, stronger server-side ranking for intent queries, note/status persistence, trip-driven coverage awareness for route stops, and broader imported trip categories such as stay, essentials, and transport. The missing pieces are the eventual MapLibre surface and deeper enrichment/import depth.
 
 ### Phase 3: Trips
 **Goal**: Users can organize their journey into named trips with cities and planned places, viewable as both a map and a list

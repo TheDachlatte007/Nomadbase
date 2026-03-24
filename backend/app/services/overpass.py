@@ -37,15 +37,34 @@ TAG_TYPE_MAP: dict[tuple[str, str], str] = {
     ("amenity", "cinema"): "cultural",
     ("amenity", "theatre"): "cultural",
     ("amenity", "place_of_worship"): "cultural",
+    ("amenity", "pharmacy"): "essentials",
+    ("amenity", "hospital"): "essentials",
+    ("amenity", "clinic"): "essentials",
+    ("amenity", "doctors"): "essentials",
+    ("amenity", "bank"): "essentials",
+    ("amenity", "atm"): "essentials",
+    ("amenity", "toilets"): "essentials",
+    ("amenity", "drinking_water"): "essentials",
+    ("amenity", "marketplace"): "essentials",
+    ("amenity", "bus_station"): "transport",
+    ("amenity", "car_rental"): "transport",
+    ("amenity", "bicycle_rental"): "transport",
+    ("amenity", "charging_station"): "transport",
     ("tourism", "attraction"): "attraction",
     ("tourism", "museum"): "cultural",
     ("tourism", "gallery"): "cultural",
     ("tourism", "artwork"): "cultural",
+    ("tourism", "hotel"): "stay",
+    ("tourism", "hostel"): "stay",
+    ("tourism", "guest_house"): "stay",
+    ("tourism", "motel"): "stay",
+    ("tourism", "apartment"): "stay",
     ("tourism", "zoo"): "attraction",
     ("tourism", "theme_park"): "attraction",
     ("tourism", "aquarium"): "attraction",
     ("tourism", "viewpoint"): "viewpoint",
-    ("tourism", "camp_site"): "park",
+    ("tourism", "camp_site"): "stay",
+    ("tourism", "caravan_site"): "stay",
     ("leisure", "park"): "park",
     ("leisure", "garden"): "park",
     ("leisure", "nature_reserve"): "park",
@@ -59,6 +78,15 @@ TAG_TYPE_MAP: dict[tuple[str, str], str] = {
     ("historic", "archaeological_site"): "cultural",
     ("historic", "ruins"): "cultural",
     ("shop", "bakery"): "cafe",
+    ("shop", "supermarket"): "essentials",
+    ("shop", "convenience"): "essentials",
+    ("shop", "greengrocer"): "essentials",
+    ("shop", "laundry"): "essentials",
+    ("railway", "station"): "transport",
+    ("railway", "halt"): "transport",
+    ("railway", "tram_stop"): "transport",
+    ("railway", "subway_entrance"): "transport",
+    ("aeroway", "terminal"): "transport",
 }
 
 # Overpass union filter lines — only named POIs (unnamed ones are discarded anyway)
@@ -81,7 +109,7 @@ out center tags;
 
 
 def _detect_type(tags: dict) -> str:
-    for key in ("amenity", "tourism", "leisure", "natural", "historic", "shop"):
+    for key in ("amenity", "tourism", "leisure", "natural", "historic", "shop", "railway", "aeroway"):
         value = tags.get(key)
         if value and (key, value) in TAG_TYPE_MAP:
             return TAG_TYPE_MAP[(key, value)]

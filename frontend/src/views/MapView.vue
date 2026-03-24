@@ -21,6 +21,9 @@
             <option value="attraction">Attraction</option>
             <option value="hiking">Hiking</option>
             <option value="viewpoint">Viewpoint</option>
+            <option value="stay">Stay</option>
+            <option value="essentials">Essentials</option>
+            <option value="transport">Transport</option>
           </select>
           <button class="action-button" type="submit">Search</button>
           <button
@@ -255,6 +258,9 @@ const SEARCH_PRESETS = [
   { label: 'Churches', query: 'church', placeType: 'cultural', tags: [] },
   { label: 'Sights', query: 'sights', placeType: 'attraction', tags: [] },
   { label: 'Nature', query: 'nature', placeType: 'park', tags: [] },
+  { label: 'Stay', query: 'hotel', placeType: 'stay', tags: [] },
+  { label: 'Essentials', query: 'supermarket', placeType: 'essentials', tags: [] },
+  { label: 'Transport', query: 'station', placeType: 'transport', tags: [] },
 ]
 const activeTagFilters = reactive(new Set())
 
@@ -362,6 +368,9 @@ const TYPE_COLORS = {
   attraction: '#0f5c52',
   hiking: '#1a6e4a',
   viewpoint: '#1a5c8a',
+  stay: '#8c4f6f',
+  essentials: '#7a6336',
+  transport: '#355d8a',
 }
 
 let map = null

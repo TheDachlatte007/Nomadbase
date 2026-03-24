@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Item 11 owned-data depth follow-up started with automatic city geocoding and stronger route prep
-last_updated: "2026-03-24T13:05:00+01:00"
-last_activity: 2026-03-24 — Trip cities now auto-geocode on create/update so route distance, coverage, and import prep work more reliably
+stopped_at: Current baseline hardening queue items 8-11 are complete
+last_updated: "2026-03-24T13:35:00+01:00"
+last_activity: 2026-03-24 — The owned dataset was broadened to cover stay, essentials, and transport POIs for more realistic trip use
 progress:
   total_phases: 5
   completed_phases: 0
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** A single app that answers: Where am I? What's around me? What do I want to see? What have I planned? What have I visited? What have I spent?
-**Current focus:** Baseline hardening for a real first trip in the next two weeks
+**Current focus:** Baseline hardening is complete for the current planned queue; next work should be a fresh follow-up plan, not more ad-hoc items
 
 ## Current Position
 
-Phase: Baseline hardening after the first alpha slice
-Plan: Make one real trip reliable end-to-end before adding more ambitious intelligence layers
+Phase: Baseline hardening complete for the current queue
+Plan: Refresh the plan before the next block so future work stays deliberate
 Status: In progress
-Last activity: 2026-03-24 — The previous alpha execution plan was completed, and the new baseline hardening sprint started with trip coverage + import readiness
+Last activity: 2026-03-24 — The baseline hardening queue was completed through owned-data depth follow-up
 
-Progress: [██████████] 100% for the previous alpha slice
+Progress: [██████████] 100% for the current baseline hardening queue
 
 ## Performance Metrics
 
@@ -67,8 +67,8 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Owned-data depth is underway: automatic city geocoding is in, and the next follow-up is broader region coverage plus cleaner route-wide import preparation.
-- Continue tightening the real trip daily loop with low-friction fixes that remove uncertainty on the road.
+- Create the next deliberate work queue instead of continuing ad-hoc from the old list.
+- The likely next themes are MapLibre migration, deeper import pipeline, and homeserver/deploy hardening.
 - Replace the current Leaflet discovery surface with the planned MapLibre map and viewport-driven POI loading.
 - Push the owned-data model further with broader coverage and a deeper import pipeline.
 - Tighten deployment defaults further: environment-specific CORS, secrets handling, and homeserver-ready config.
@@ -80,6 +80,7 @@ Recent decisions affecting current work:
 - 100k+ POI data volume still requires proper viewport queries and spatial index validation once the real map lands.
 - The trip planner is now usable in alpha form, with city notes, route summaries, city-level discovery suggestions, and direct coverage/import readiness.
 - Search is noticeably better, and import quality is more resilient now. The planner can now also expose weak city coverage and queue imports directly, but a deeper import pipeline and broader owned-data coverage are still open.
+- The owned dataset now covers more practical trip categories too: stay, essentials, and transport POIs can be imported and searched locally.
 - Tracking is closer to a real group-trip workflow now because expenses can be re-split against the current participant set after the crew changes.
 - Route readiness is now visible enough for real pre-trip prep: you can see whether a route is ready, partial, or still importing.
 - Trip cities now try to geocode themselves automatically, which makes route distance, planner maps, and city-level coverage more dependable without manual coordinates.
@@ -89,6 +90,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-24T13:05:00+01:00
-Stopped at: Item 11 owned-data depth follow-up started with automatic city geocoding and stronger route prep
+Last session: 2026-03-24T13:35:00+01:00
+Stopped at: Current baseline hardening queue items 8-11 are complete
 Resume file: .planning/NEXT-SEARCH-AND-TRIP-UX.md

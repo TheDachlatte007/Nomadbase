@@ -43,6 +43,9 @@ DISCOVERY_TYPE_BONUSES = {
     "hiking": 16,
     "restaurant": 14,
     "cafe": 12,
+    "stay": 13,
+    "essentials": 12,
+    "transport": 10,
 }
 
 
@@ -227,6 +230,12 @@ def _build_discovery_reason(
         reasons.append("Good sightseeing pick")
     elif place_type in {"park", "hiking"}:
         reasons.append("Good outdoor break")
+    elif place_type == "stay":
+        reasons.append("Useful place to stay nearby")
+    elif place_type == "essentials":
+        reasons.append("Good day-to-day stop for the route")
+    elif place_type == "transport":
+        reasons.append("Helpful transport anchor for this stop")
 
     return " · ".join(reasons[:2]) or "Relevant for this route stop"
 
