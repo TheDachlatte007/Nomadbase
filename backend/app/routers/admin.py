@@ -22,7 +22,7 @@ from app.schemas.admin import (
     PreferencePayload,
     SystemStatusResponse,
 )
-from app.services.import_jobs import run_import_job
+from app.services.import_jobs import enqueue_import_job
 
 router = APIRouter()
 
@@ -144,20 +144,21 @@ async def trigger_import(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    normalized_city = payload.city.strip()
-    normalized_country = payload.country.strip() if payload.country else None
+    try:
+        job, created = await enqueue_import_job(
+            db,
+            background_tasks,
+            city=payload.city,
+            country=payload.country,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    if not normalized_city:
-        raise HTTPException(status_code=422, detail="City is required")
-
-    job = ImportJob(city=normalized_city, country=normalized_country, status="queued")
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-    background_tasks.add_task(run_import_job, job.id)
     return ImportJobResponse(
         data=_serialize_import_job(job),
-        message="Import queued in background",
+        message="Import queued in background"
+        if created
+        else "Existing import job already running",
     )
 
 

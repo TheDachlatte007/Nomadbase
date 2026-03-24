@@ -5,6 +5,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from app.schemas.admin import ImportJobItem
+
 
 class TripUpdateRequest(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
@@ -31,6 +33,10 @@ class TripCityUpdateRequest(BaseModel):
     lat: float | None = None
     lon: float | None = None
     notes: str | None = Field(default=None, max_length=2000)
+
+
+class TripCoverageImportRequest(BaseModel):
+    city_ids: list[str] = Field(default_factory=list)
 
 
 class TripParticipantCreateRequest(BaseModel):
@@ -92,6 +98,7 @@ class TripOverviewCityResponse(BaseModel):
     preview_places: list[str]
     notes: str | None = None
     highlights: list[str]
+    coverage: "TripOverviewCityCoverageResponse"
     places: list["TripOverviewPlaceResponse"]
     suggested_unassigned_places: list["TripOverviewSuggestedPlaceResponse"]
     discovery_candidates: list["TripOverviewDiscoveryPlaceResponse"]
@@ -135,6 +142,25 @@ class TripOverviewDiscoveryPlaceResponse(BaseModel):
     reason: str
 
 
+class TripOverviewCityCoverageResponse(BaseModel):
+    level: str
+    local_place_count: int
+    region_match_count: int
+    nearby_place_count: int
+    import_region_hint: str
+    summary: str
+    needs_import: bool
+    last_imported_at: datetime | None = None
+
+
+class TripOverviewCoverageSummaryResponse(BaseModel):
+    ready: int
+    usable: int
+    thin: int
+    missing: int
+    needs_import: int
+
+
 class TripOverviewResponse(BaseModel):
     trip_id: str
     trip_name: str
@@ -147,8 +173,16 @@ class TripOverviewResponse(BaseModel):
     route_distance_km: float | None = None
     cities_without_places: int
     route_highlights: list[str]
+    coverage_summary: TripOverviewCoverageSummaryResponse
     cities: list[TripOverviewCityResponse]
     unassigned_places: list[TripOverviewPlaceResponse]
+
+
+class TripCoverageImportResponse(BaseModel):
+    data: list[ImportJobItem]
+    queued_count: int
+    reused_count: int
+    message: str
 
 
 class TripListResponse(BaseModel):

@@ -172,6 +172,17 @@ export const useTripsStore = defineStore('trips', () => {
     }
   }
 
+  async function queueCoverageImports(tripId, cityIds = []) {
+    const res = await fetch(`/api/trips/${tripId}/coverage/imports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ city_ids: cityIds }),
+    })
+    if (!res.ok) throw new Error(await readError(res, 'Queue imports failed'))
+    const payload = await res.json()
+    return payload
+  }
+
   async function deleteTrip(tripId) {
     const res = await fetch(`/api/trips/${tripId}`, { method: 'DELETE' })
     if (!res.ok) throw new Error(await readError(res, 'Delete trip failed'))
@@ -210,6 +221,7 @@ export const useTripsStore = defineStore('trips', () => {
     addParticipant,
     removeParticipant,
     updateTrip,
+    queueCoverageImports,
     deleteTrip,
     setActiveTrip,
   }

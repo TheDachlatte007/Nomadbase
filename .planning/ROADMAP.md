@@ -53,7 +53,7 @@ The repository already contains a partial backend scaffold for 01-01, but there 
 **Plans**: TBD
 
 Current reality note:
-The repo now contains a working alpha data flow for `places` and `saves`, including seeded sample places, stronger server-side ranking for intent queries, and note/status persistence. The missing pieces are the eventual MapLibre surface and deeper enrichment/import depth.
+The repo now contains a working alpha data flow for `places` and `saves`, including seeded sample places, stronger server-side ranking for intent queries, note/status persistence, and trip-driven coverage awareness for route stops. The missing pieces are the eventual MapLibre surface and deeper enrichment/import depth.
 
 ### Phase 3: Trips
 **Goal**: Users can organize their journey into named trips with cities and planned places, viewable as both a map and a list
@@ -67,7 +67,7 @@ The repo now contains a working alpha data flow for `places` and `saves`, includ
 **Plans**: TBD
 
 Current reality note:
-Trip creation, ordered city routes, participant management, city-assigned trip saves, route summaries, and city-level discovery suggestions are now live in alpha form. The map page now also reflects the active route directly. The biggest open pieces are deeper import quality, broader data coverage, and later search/import depth.
+Trip creation, ordered city routes, participant management, city-assigned trip saves, route summaries, city-level discovery suggestions, and per-stop coverage/import readiness are now live in alpha form. The map page now also reflects the active route directly. The biggest open pieces are deeper import quality, broader data coverage, and later search/import depth.
 
 ### Phase 4: Tracking
 **Goal**: Users can record what they spend and where they go, and see a summary of expenses by category
@@ -94,7 +94,7 @@ The alpha now supports expense creation, visit logging, recent activity lists, a
 **Plans**: TBD
 
 Current reality note:
-Preferences, import inventory, system metrics, and recent import job history are now exposed in the API and frontend alpha. Imports now queue immediately, run in the background inside the app process, normalize regions more cleanly, and have basic Overpass fallback resilience. Later work should focus on retry strategy, scheduled updates, and a richer import pipeline rather than more admin scaffolding.
+Preferences, import inventory, system metrics, and recent import job history are now exposed in the API and frontend alpha. Imports now queue immediately, run in the background inside the app process, normalize regions more cleanly, have basic Overpass fallback resilience, and can be queued directly from weak trip stops. Later work should focus on retry strategy, scheduled updates, and a richer import pipeline rather than more admin scaffolding.
 
 ## Progress
 

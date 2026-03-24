@@ -165,3 +165,48 @@ Status: done
 - Do not depend on local Docker for verification.
 - Keep deployment simple enough for Portainer.
 - Prefer owned/cached data over runtime dependency on external APIs.
+
+## Baseline Hardening Sprint
+
+This is the next ordered build queue for the two-week pre-trip window.
+The goal is not feature sprawl. The goal is that one real trip can be created,
+prepared offline enough, and used daily without obvious friction.
+
+### Item 8: Trip coverage and import readiness
+- Show local data coverage per trip city directly in the planner.
+- Let the planner queue imports for one city or all weak cities.
+- Success criteria:
+  - every stop shows whether local place coverage is ready, usable, thin, or missing
+  - missing or thin cities can be queued for import without leaving the trip flow
+  - route preparation becomes more deterministic before departure
+Status: done
+
+### Item 9: Shared trip workflow hardening
+- Tighten the most common in-trip daily actions:
+  - edit and re-split expenses cleanly
+  - reduce friction when trip participants change
+  - keep mobile forms and summary cards compact and reliable
+- Success criteria:
+  - expense editing feels like part of the main flow, not a hidden edge case
+  - users can recover from a changed group setup without data confusion
+  - key tracking actions stay comfortable on mobile
+Status: next
+
+### Item 10: Offline-first trip confidence
+- Make the app clearer about what is already cached locally versus still dependent on fresh imports.
+- Tighten the baseline deploy/smoke checks around trip, tracking, and import readiness.
+- Success criteria:
+  - a user can tell whether a trip is ready to use on the road
+  - the smoke script checks the most important baseline endpoints
+  - Portainer deploy regressions are easier to spot quickly
+Status: in_progress
+
+### Item 11: Owned data depth follow-up
+- Push the owned-data model further:
+  - broader region coverage
+  - cleaner route-wide import preparation
+  - richer descriptions only where they add practical value
+- Success criteria:
+  - route planning does not rely on a lucky narrow import set
+  - the local database becomes progressively more useful per trip
+Status: planned

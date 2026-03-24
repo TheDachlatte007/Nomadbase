@@ -14,7 +14,10 @@ DEFAULT_PATHS = [
     "/api/map/places?limit=1",
     "/api/trips/",
     "/api/saves/",
+    "/api/tracking/expenses",
+    "/api/tracking/expenses/summary",
     "/api/admin/status",
+    "/api/admin/imports",
     "/api/admin/import-jobs",
     "/api/docs",
 ]

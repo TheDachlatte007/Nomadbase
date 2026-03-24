@@ -55,9 +55,23 @@ This checks the homepage plus the core alpha endpoints:
 - `/api/map/places?limit=1`
 - `/api/trips/`
 - `/api/saves/`
+- `/api/tracking/expenses`
+- `/api/tracking/expenses/summary`
 - `/api/admin/status`
+- `/api/admin/imports`
 - `/api/admin/import-jobs`
 - `/api/docs`
+
+## Trip baseline check
+
+For a real trip-prep flow, the first useful manual check is now:
+
+1. open `Trips`
+2. create one trip with 2-3 cities
+3. open the trip planner
+4. use `Import missing stops` if any city shows `thin` or `missing`
+5. wait for the background jobs to finish in Admin or on the planner
+6. confirm the map and planner start showing local suggestions for each stop
 
 ## Known limitations
 

@@ -16,6 +16,33 @@
       </span>
     </div>
 
+    <section class="coverage-summary-card">
+      <div class="stack-between stack-between--tight">
+        <div>
+          <p class="card-eyebrow">Offline trip coverage</p>
+          <p class="muted">
+            Make sure each stop has enough cached places before the trip starts.
+          </p>
+        </div>
+        <button
+          v-if="overview.coverage_summary?.needs_import"
+          class="action-button"
+          type="button"
+          :disabled="queueingAllImports"
+          @click="queueMissingImports"
+        >
+          {{ queueingAllImports ? 'Queueing imports...' : 'Import missing stops' }}
+        </button>
+      </div>
+      <div class="chip-row">
+        <span class="chip">{{ overview.coverage_summary?.ready || 0 }} ready</span>
+        <span class="chip">{{ overview.coverage_summary?.usable || 0 }} usable</span>
+        <span class="chip">{{ overview.coverage_summary?.thin || 0 }} thin</span>
+        <span class="chip">{{ overview.coverage_summary?.missing || 0 }} missing</span>
+      </div>
+      <p v-if="coverageFeedback" class="feedback">{{ coverageFeedback }}</p>
+    </section>
+
     <div ref="mapEl" class="route-map"></div>
 
     <div class="trip-planner-grid">
@@ -44,6 +71,32 @@
           <span class="chip">{{ city.favorite_count }} favorites</span>
           <span class="chip">{{ city.want_to_visit_count }} want to visit</span>
         </div>
+
+        <section class="city-coverage-card" :data-level="city.coverage.level">
+          <div class="stack-between stack-between--tight">
+            <div>
+              <p class="card-eyebrow">Local data coverage</p>
+              <p class="muted">{{ city.coverage.summary }}</p>
+            </div>
+            <button
+              v-if="city.coverage.needs_import"
+              class="secondary-button action-button"
+              type="button"
+              :disabled="queueingCityId === city.id"
+              @click="queueCityImport(city)"
+            >
+              {{ queueingCityId === city.id ? 'Queueing...' : 'Import city' }}
+            </button>
+          </div>
+          <div class="chip-row">
+            <span class="chip">{{ city.coverage.level }}</span>
+            <span class="chip">{{ city.coverage.local_place_count }} local places</span>
+            <span class="chip">{{ city.coverage.nearby_place_count }} nearby</span>
+          </div>
+          <p v-if="city.coverage.last_imported_at" class="muted">
+            Last imported {{ formatTimestamp(city.coverage.last_imported_at) }}
+          </p>
+        </section>
 
         <p class="muted">{{ summarizePlaceTypes(city.place_type_counts) }}</p>
 
@@ -181,6 +234,9 @@ const tripsStore = useTripsStore()
 const mapEl = ref(null)
 const assigningPlaceId = ref('')
 const savingDiscoveryId = ref('')
+const queueingCityId = ref('')
+const queueingAllImports = ref(false)
+const coverageFeedback = ref('')
 const cityNoteDrafts = reactive({})
 const cityFeedback = reactive({})
 const routeCities = computed(() =>
@@ -209,6 +265,18 @@ watch(
 function humanizeStatus(status) {
   if (status === 'want_to_visit') return 'want to visit'
   return status.replace(/_/g, ' ')
+}
+
+function formatTimestamp(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function summarizePlaceTypes(placeTypeCounts) {
@@ -262,6 +330,45 @@ async function saveDiscoveryPlace(city, place) {
   } finally {
     savingDiscoveryId.value = ''
   }
+}
+
+async function queueMissingImports() {
+  queueingAllImports.value = true
+  coverageFeedback.value = 'Queueing missing city imports...'
+  try {
+    const payload = await tripsStore.queueCoverageImports(props.overview.trip_id)
+    await tripsStore.fetchTripOverview(props.overview.trip_id)
+    coverageFeedback.value = buildCoverageFeedback(payload)
+  } catch (error) {
+    coverageFeedback.value = error.message || 'Import queue failed'
+  } finally {
+    queueingAllImports.value = false
+  }
+}
+
+async function queueCityImport(city) {
+  queueingCityId.value = city.id
+  coverageFeedback.value = `Queueing import for ${city.name}...`
+  try {
+    const payload = await tripsStore.queueCoverageImports(props.overview.trip_id, [city.id])
+    await tripsStore.fetchTripOverview(props.overview.trip_id)
+    coverageFeedback.value = buildCoverageFeedback(payload)
+  } catch (error) {
+    coverageFeedback.value = error.message || 'Import queue failed'
+  } finally {
+    queueingCityId.value = ''
+  }
+}
+
+function buildCoverageFeedback(payload) {
+  const queuedCount = payload?.queued_count || 0
+  const reusedCount = payload?.reused_count || 0
+  if (!queuedCount && !reusedCount) return payload?.message || 'No imports were queued.'
+  if (queuedCount && reusedCount) {
+    return `${queuedCount} import job(s) queued and ${reusedCount} existing job(s) reused.`
+  }
+  if (queuedCount) return `${queuedCount} import job(s) queued.`
+  return `${reusedCount} existing import job(s) already running.`
 }
 
 async function renderMap() {

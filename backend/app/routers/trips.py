@@ -1,7 +1,7 @@
 import math
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from geoalchemy2 import WKTElement
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,11 +10,14 @@ from app.db import get_db
 from app.models.city import City
 from app.models.expense import Expense
 from app.models.expense_split import ExpenseSplit
+from app.models.import_job import ImportJob
 from app.models.place import Place
 from app.models.saved_place import SavedPlace
 from app.models.trip import Trip
 from app.models.trip_participant import TripParticipant
 from app.schemas.trip import (
+    TripCoverageImportRequest,
+    TripCoverageImportResponse,
     TripCityCreateRequest,
     TripCityReorderRequest,
     TripCityUpdateRequest,
@@ -25,6 +28,7 @@ from app.schemas.trip import (
     TripResponse,
     TripUpdateRequest,
 )
+from app.services.import_jobs import enqueue_import_jobs
 
 router = APIRouter()
 
@@ -165,6 +169,26 @@ def _build_route_highlights(
     return highlights[:5]
 
 
+def _coverage_level(local_place_count: int) -> str:
+    if local_place_count >= 120:
+        return "ready"
+    if local_place_count >= 35:
+        return "usable"
+    if local_place_count >= 1:
+        return "thin"
+    return "missing"
+
+
+def _build_coverage_summary(level: str, local_place_count: int, import_region_hint: str) -> str:
+    if level == "ready":
+        return f"{local_place_count} local places already cover {import_region_hint}."
+    if level == "usable":
+        return f"{local_place_count} local places exist for {import_region_hint}, enough for basic trip use."
+    if level == "thin":
+        return f"Only {local_place_count} local places are available for {import_region_hint}; importing more is recommended."
+    return f"No local places are cached for {import_region_hint} yet."
+
+
 def _build_discovery_reason(
     city_entry: dict,
     *,
@@ -291,6 +315,68 @@ async def _load_city_discovery_candidates(
         )
     )
     return candidates[:4]
+
+
+async def _load_city_coverage(db: AsyncSession, city_entry: dict) -> dict:
+    city_name = city_entry.get("name")
+    country = city_entry.get("country")
+    lat = city_entry.get("lat")
+    lon = city_entry.get("lon")
+    import_region_hint = f"{city_name}, {country}" if country else city_name
+    city_name_pattern = f"%{city_name.lower()}%" if city_name else None
+    country_pattern = f"%{country.lower()}%" if country else None
+
+    region_conditions = []
+    if city_name_pattern:
+        region_conditions.append(func.lower(func.coalesce(Place.region, "")).like(city_name_pattern))
+        region_conditions.append(func.lower(Place.name).like(city_name_pattern))
+    if country_pattern:
+        region_conditions.append(func.lower(func.coalesce(Place.region, "")).like(country_pattern))
+
+    region_match_count = 0
+    if region_conditions:
+        region_match_count = int(
+            await db.scalar(select(func.count()).select_from(Place).where(or_(*region_conditions)))
+            or 0
+        )
+
+    nearby_place_count = 0
+    if lat is not None and lon is not None:
+        city_point = WKTElement(f"POINT({lon} {lat})", srid=4326)
+        nearby_place_count = int(
+            await db.scalar(
+                select(func.count())
+                .select_from(Place)
+                .where(func.ST_DistanceSphere(Place.location, city_point) <= 25000)
+            )
+            or 0
+        )
+
+    last_imported_at = await db.scalar(
+        select(func.max(ImportJob.finished_at)).where(
+            ImportJob.status == "completed",
+            func.lower(ImportJob.city) == (city_name or "").lower(),
+            or_(
+                ImportJob.country.is_(None),
+                func.lower(func.coalesce(ImportJob.country, "")) == (country or "").lower(),
+            ),
+        )
+    )
+
+    local_place_count = max(region_match_count, nearby_place_count)
+    level = _coverage_level(local_place_count)
+    needs_import = level in {"thin", "missing"}
+
+    return {
+        "level": level,
+        "local_place_count": local_place_count,
+        "region_match_count": region_match_count,
+        "nearby_place_count": nearby_place_count,
+        "import_region_hint": import_region_hint,
+        "summary": _build_coverage_summary(level, local_place_count, import_region_hint),
+        "needs_import": needs_import,
+        "last_imported_at": last_imported_at,
+    }
 
 
 async def _load_trip_payloads(
@@ -462,6 +548,7 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
             "places": [],
             "suggested_unassigned_places": [],
             "discovery_candidates": [],
+            "coverage": None,
         }
         for row in city_rows
     }
@@ -572,6 +659,8 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
                 }
             )
 
+    coverage_counts = {"ready": 0, "usable": 0, "thin": 0, "missing": 0, "needs_import": 0}
+
     for city_entry in city_map.values():
         unique_suggestions = {}
         for item in city_entry["suggested_unassigned_places"]:
@@ -580,6 +669,10 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
         city_entry["discovery_candidates"] = await _load_city_discovery_candidates(
             db, city_entry, saved_place_ids
         )
+        city_entry["coverage"] = await _load_city_coverage(db, city_entry)
+        coverage_counts[city_entry["coverage"]["level"]] += 1
+        if city_entry["coverage"]["needs_import"]:
+            coverage_counts["needs_import"] += 1
 
     route_distance_km = None
     route_coordinates = [
@@ -626,6 +719,7 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
             cities_without_places=cities_without_places,
             top_place_types=assigned_place_type_totals,
         ),
+        "coverage_summary": coverage_counts,
         "cities": [city_map[row.id] for row in city_rows],
         "unassigned_places": unassigned_places,
     }
@@ -853,3 +947,92 @@ async def get_trip_overview(
 ):
     trip_uuid = _parse_uuid(trip_id, "trip_id")
     return TripOverviewResponse(**await _load_trip_overview_payload(db, trip_uuid))
+
+
+@router.post("/{trip_id}/coverage/imports", response_model=TripCoverageImportResponse)
+async def queue_trip_coverage_imports(
+    trip_id: str,
+    payload: TripCoverageImportRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    trip_uuid = _parse_uuid(trip_id, "trip_id")
+    trip = await db.get(Trip, trip_uuid)
+    if trip is None:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    city_rows = (
+        await db.execute(
+            select(
+                City.id,
+                City.name,
+                City.country,
+                func.ST_Y(City.location).label("lat"),
+                func.ST_X(City.location).label("lon"),
+                City.sort_order,
+            )
+            .where(City.trip_id == trip_uuid)
+            .order_by(City.sort_order.asc(), City.created_at.asc(), City.name.asc())
+        )
+    ).all()
+
+    if not city_rows:
+        return TripCoverageImportResponse(
+            data=[],
+            queued_count=0,
+            reused_count=0,
+            message="Trip has no cities yet",
+        )
+
+    selected_ids = {_parse_uuid(city_id, "city_id") for city_id in payload.city_ids}
+    cities_to_queue: list[tuple[str, str | None]] = []
+
+    for row in city_rows:
+        if selected_ids and row.id not in selected_ids:
+            continue
+
+        coverage = await _load_city_coverage(
+            db,
+            {
+                "name": row.name,
+                "country": row.country,
+                "lat": float(row.lat) if row.lat is not None else None,
+                "lon": float(row.lon) if row.lon is not None else None,
+            },
+        )
+        if selected_ids or coverage["needs_import"]:
+            cities_to_queue.append((row.name, row.country))
+
+    if not cities_to_queue:
+        return TripCoverageImportResponse(
+            data=[],
+            queued_count=0,
+            reused_count=0,
+            message="All trip cities already have usable local coverage",
+        )
+
+    jobs, queued_count = await enqueue_import_jobs(db, background_tasks, cities_to_queue)
+    data = [
+        {
+            "id": str(job.id),
+            "city": job.city,
+            "country": job.country,
+            "region": job.region,
+            "status": job.status,
+            "imported_count": int(job.imported_count or 0),
+            "total_elements": int(job.total_elements or 0),
+            "error": job.error,
+            "created_at": job.created_at,
+            "finished_at": job.finished_at,
+        }
+        for job in jobs
+    ]
+    reused_count = len(jobs) - queued_count
+    return TripCoverageImportResponse(
+        data=data,
+        queued_count=queued_count,
+        reused_count=reused_count,
+        message="Trip coverage imports queued"
+        if queued_count
+        else "Existing import jobs already cover the requested trip cities",
+    )

@@ -703,6 +703,30 @@ code {
   gap: 14px;
 }
 
+.coverage-summary-card,
+.city-coverage-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.city-coverage-card[data-level="missing"] {
+  border-color: rgba(200, 111, 49, 0.32);
+  background: rgba(200, 111, 49, 0.08);
+}
+
+.city-coverage-card[data-level="thin"] {
+  border-color: rgba(200, 111, 49, 0.22);
+}
+
+.city-coverage-card[data-level="ready"] {
+  border-color: rgba(15, 92, 82, 0.24);
+  background: rgba(215, 235, 231, 0.26);
+}
+
 .route-map {
   height: 320px;
   width: 100%;
