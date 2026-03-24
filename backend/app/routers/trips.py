@@ -362,6 +362,25 @@ async def _load_city_coverage(db: AsyncSession, city_entry: dict) -> dict:
             ),
         )
     )
+    active_job = (
+        await db.execute(
+            select(
+                ImportJob.id,
+                ImportJob.status,
+                ImportJob.created_at,
+            )
+            .where(
+                ImportJob.status.in_(("queued", "running")),
+                func.lower(ImportJob.city) == (city_name or "").lower(),
+                or_(
+                    ImportJob.country.is_(None),
+                    func.lower(func.coalesce(ImportJob.country, "")) == (country or "").lower(),
+                ),
+            )
+            .order_by(ImportJob.created_at.desc())
+            .limit(1)
+        )
+    ).first()
 
     local_place_count = max(region_match_count, nearby_place_count)
     level = _coverage_level(local_place_count)
@@ -376,6 +395,9 @@ async def _load_city_coverage(db: AsyncSession, city_entry: dict) -> dict:
         "summary": _build_coverage_summary(level, local_place_count, import_region_hint),
         "needs_import": needs_import,
         "last_imported_at": last_imported_at,
+        "active_import_job_id": str(active_job.id) if active_job else None,
+        "active_import_status": active_job.status if active_job else None,
+        "active_import_created_at": active_job.created_at if active_job else None,
     }
 
 
@@ -659,7 +681,16 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
                 }
             )
 
-    coverage_counts = {"ready": 0, "usable": 0, "thin": 0, "missing": 0, "needs_import": 0}
+    coverage_counts = {
+        "ready": 0,
+        "usable": 0,
+        "thin": 0,
+        "missing": 0,
+        "needs_import": 0,
+        "queued_imports": 0,
+        "running_imports": 0,
+        "route_readiness": "needs_imports",
+    }
 
     for city_entry in city_map.values():
         unique_suggestions = {}
@@ -673,6 +704,17 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
         coverage_counts[city_entry["coverage"]["level"]] += 1
         if city_entry["coverage"]["needs_import"]:
             coverage_counts["needs_import"] += 1
+        if city_entry["coverage"]["active_import_status"] == "queued":
+            coverage_counts["queued_imports"] += 1
+        elif city_entry["coverage"]["active_import_status"] == "running":
+            coverage_counts["running_imports"] += 1
+
+    if coverage_counts["missing"] == 0 and coverage_counts["thin"] == 0:
+        coverage_counts["route_readiness"] = "ready"
+    elif coverage_counts["running_imports"] or coverage_counts["queued_imports"]:
+        coverage_counts["route_readiness"] = "importing"
+    elif coverage_counts["usable"] or coverage_counts["ready"]:
+        coverage_counts["route_readiness"] = "partial"
 
     route_distance_km = None
     route_coordinates = [

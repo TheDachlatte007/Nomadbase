@@ -28,17 +28,27 @@
           v-if="overview.coverage_summary?.needs_import"
           class="action-button"
           type="button"
-          :disabled="queueingAllImports"
+          :disabled="queueingAllImports || isRouteImporting"
           @click="queueMissingImports"
         >
           {{ queueingAllImports ? 'Queueing imports...' : 'Import missing stops' }}
         </button>
+      </div>
+      <div class="trip-readiness-strip" :data-state="overview.coverage_summary?.route_readiness || 'needs_imports'">
+        <strong>{{ routeReadinessTitle }}</strong>
+        <span>{{ routeReadinessCopy }}</span>
       </div>
       <div class="chip-row">
         <span class="chip">{{ overview.coverage_summary?.ready || 0 }} ready</span>
         <span class="chip">{{ overview.coverage_summary?.usable || 0 }} usable</span>
         <span class="chip">{{ overview.coverage_summary?.thin || 0 }} thin</span>
         <span class="chip">{{ overview.coverage_summary?.missing || 0 }} missing</span>
+        <span v-if="overview.coverage_summary?.queued_imports" class="chip">
+          {{ overview.coverage_summary.queued_imports }} queued
+        </span>
+        <span v-if="overview.coverage_summary?.running_imports" class="chip">
+          {{ overview.coverage_summary.running_imports }} importing
+        </span>
       </div>
       <p v-if="coverageFeedback" class="feedback">{{ coverageFeedback }}</p>
     </section>
@@ -82,17 +92,31 @@
               v-if="city.coverage.needs_import"
               class="secondary-button action-button"
               type="button"
-              :disabled="queueingCityId === city.id"
+              :disabled="queueingCityId === city.id || ['queued', 'running'].includes(city.coverage.active_import_status)"
               @click="queueCityImport(city)"
             >
-              {{ queueingCityId === city.id ? 'Queueing...' : 'Import city' }}
+              {{
+                queueingCityId === city.id
+                  ? 'Queueing...'
+                  : city.coverage.active_import_status === 'running'
+                    ? 'Import running'
+                    : city.coverage.active_import_status === 'queued'
+                      ? 'Import queued'
+                      : 'Import city'
+              }}
             </button>
           </div>
           <div class="chip-row">
             <span class="chip">{{ city.coverage.level }}</span>
             <span class="chip">{{ city.coverage.local_place_count }} local places</span>
             <span class="chip">{{ city.coverage.nearby_place_count }} nearby</span>
+            <span v-if="city.coverage.active_import_status" class="chip">
+              {{ city.coverage.active_import_status }}
+            </span>
           </div>
+          <p v-if="city.coverage.active_import_created_at" class="muted">
+            Import {{ city.coverage.active_import_status }} since {{ formatTimestamp(city.coverage.active_import_created_at) }}
+          </p>
           <p v-if="city.coverage.last_imported_at" class="muted">
             Last imported {{ formatTimestamp(city.coverage.last_imported_at) }}
           </p>
@@ -245,6 +269,36 @@ const routeCities = computed(() =>
 const assignedPlaces = computed(() =>
   (props.overview?.cities || []).flatMap((city) => city.places || [])
 )
+const isRouteImporting = computed(() => {
+  const summary = props.overview?.coverage_summary
+  return Boolean((summary?.queued_imports || 0) + (summary?.running_imports || 0))
+})
+const routeReadinessTitle = computed(() => {
+  switch (props.overview?.coverage_summary?.route_readiness) {
+    case 'ready':
+      return 'Route looks road-ready.'
+    case 'importing':
+      return 'Route prep is still importing.'
+    case 'partial':
+      return 'Route is usable, but still uneven.'
+    default:
+      return 'Route still needs local data.'
+  }
+})
+const routeReadinessCopy = computed(() => {
+  const summary = props.overview?.coverage_summary
+  if (!summary) return ''
+  switch (summary.route_readiness) {
+    case 'ready':
+      return 'Every stop has at least usable local coverage already cached.'
+    case 'importing':
+      return `${summary.queued_imports + summary.running_imports} stop import(s) are queued or running right now.`
+    case 'partial':
+      return `${summary.thin + summary.missing} stop(s) still need stronger local coverage before departure.`
+    default:
+      return 'Queue the missing stops so the trip works more reliably on the road.'
+  }
+})
 
 let map = null
 let layerGroup = null

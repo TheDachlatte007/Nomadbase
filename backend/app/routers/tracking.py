@@ -17,6 +17,8 @@ from app.models.visit import Visit
 from app.schemas.tracking import (
     ExpenseCreateRequest,
     ExpenseListResponse,
+    ExpenseRebalanceRequest,
+    ExpenseRebalanceResponse,
     ExpenseResponse,
     ExpenseSummaryResponse,
     ExpenseUpdateRequest,
@@ -362,6 +364,24 @@ async def _replace_expense_splits(
         )
 
 
+async def _expense_split_ids_for_trip(
+    db: AsyncSession,
+    trip_id: UUID,
+) -> dict[UUID, set[UUID]]:
+    result = await db.execute(
+        select(Expense.id, ExpenseSplit.participant_id)
+        .outerjoin(ExpenseSplit, ExpenseSplit.expense_id == Expense.id)
+        .where(Expense.trip_id == trip_id)
+    )
+    split_map: dict[UUID, set[UUID]] = defaultdict(set)
+    for expense_id, participant_id in result.all():
+        if participant_id is not None:
+            split_map[expense_id].add(participant_id)
+        else:
+            split_map.setdefault(expense_id, set())
+    return split_map
+
+
 @router.get("/expenses/summary", response_model=ExpenseSummaryResponse)
 async def expense_summary(
     trip_id: str | None = None,
@@ -615,6 +635,77 @@ async def update_expense(
     result = await db.execute(_expense_stmt().where(Expense.id == expense.id))
     serialized = await _serialize_expenses(db, result.all())
     return ExpenseResponse(**serialized[0])
+
+
+@router.post("/expenses/rebalance", response_model=ExpenseRebalanceResponse)
+async def rebalance_expenses(
+    payload: ExpenseRebalanceRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    trip_uuid = _parse_uuid(payload.trip_id, "trip_id")
+    await _require_trip(db, trip_uuid)
+    trip_participants = await _load_trip_participants(db, trip_uuid)
+    participant_ids = list(trip_participants.keys())
+    if not participant_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="Add participants to the trip before re-splitting expenses",
+        )
+
+    selected_expense_ids = {
+        _parse_uuid(expense_id, "expense_ids") for expense_id in payload.expense_ids
+    }
+    expense_rows = (
+        await db.execute(
+            select(Expense.id, Expense.amount)
+            .where(Expense.trip_id == trip_uuid)
+            .order_by(Expense.date.desc(), Expense.created_at.desc())
+        )
+    ).all()
+
+    if selected_expense_ids:
+        expense_rows = [row for row in expense_rows if row.id in selected_expense_ids]
+
+    if not expense_rows:
+        return ExpenseRebalanceResponse(
+            trip_id=str(trip_uuid),
+            updated_count=0,
+            skipped_count=0,
+            participant_count=len(participant_ids),
+            message="No matching expenses found for re-splitting",
+        )
+
+    current_split_map = await _expense_split_ids_for_trip(db, trip_uuid)
+    target_participant_set = set(participant_ids)
+    updated_count = 0
+    skipped_count = 0
+
+    for row in expense_rows:
+        if current_split_map.get(row.id, set()) == target_participant_set:
+            skipped_count += 1
+            continue
+
+        await _replace_expense_splits(
+            db,
+            row.id,
+            Decimal(str(row.amount)),
+            participant_ids,
+        )
+        updated_count += 1
+
+    await db.commit()
+    message = (
+        f"Re-split {updated_count} expense(s) across {len(participant_ids)} participant(s)"
+        if updated_count
+        else "Selected expenses already match the current trip crew"
+    )
+    return ExpenseRebalanceResponse(
+        trip_id=str(trip_uuid),
+        updated_count=updated_count,
+        skipped_count=skipped_count,
+        participant_count=len(participant_ids),
+        message=message,
+    )
 
 
 @router.get("/visits", response_model=VisitListResponse)

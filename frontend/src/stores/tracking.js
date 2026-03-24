@@ -84,6 +84,20 @@ export const useTrackingStore = defineStore('tracking', () => {
     await fetchAll(data.trip_id || currentTripId.value)
   }
 
+  async function rebalanceExpenses(data) {
+    const res = await fetch('/api/tracking/expenses/rebalance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      throw new Error(await readError(res, 'Rebalance expenses failed'))
+    }
+    const payload = await res.json()
+    await fetchAll(data.trip_id || currentTripId.value)
+    return payload
+  }
+
   async function addVisit(data) {
     const res = await fetch('/api/tracking/visits', {
       method: 'POST',
@@ -117,6 +131,7 @@ export const useTrackingStore = defineStore('tracking', () => {
     fetchSettlements,
     addExpense,
     updateExpense,
+    rebalanceExpenses,
     addVisit,
     deleteExpense,
     deleteVisit,

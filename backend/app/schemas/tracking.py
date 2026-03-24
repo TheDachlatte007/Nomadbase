@@ -29,6 +29,11 @@ class ExpenseUpdateRequest(BaseModel):
     date: date_type | None = None
 
 
+class ExpenseRebalanceRequest(BaseModel):
+    trip_id: str
+    expense_ids: list[str] = Field(default_factory=list)
+
+
 class ExpenseResponse(BaseModel):
     id: str
     amount: float
@@ -64,6 +69,14 @@ class ExpenseSummaryResponse(BaseModel):
     data: list[ExpenseSummaryItem]
     total_amount: float
     currency: str
+    message: str
+
+
+class ExpenseRebalanceResponse(BaseModel):
+    trip_id: str
+    updated_count: int
+    skipped_count: int
+    participant_count: int
     message: str
 
 

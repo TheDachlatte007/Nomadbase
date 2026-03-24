@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Baseline hardening item 8 is complete; item 9 shared trip workflow hardening is next
-last_updated: "2026-03-24T11:25:00+01:00"
-last_activity: 2026-03-24 — Trip planner now shows city coverage and can queue missing city imports directly from the route
+stopped_at: Baseline hardening items 8-10 are complete; item 11 owned-data depth follow-up is next
+last_updated: "2026-03-24T12:35:00+01:00"
+last_activity: 2026-03-24 — Trip planning now exposes route readiness directly, including queued/running import state for weak stops
 progress:
   total_phases: 5
   completed_phases: 0
@@ -67,8 +67,8 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Shared trip workflow hardening is next: expense edit/resplit flow, participant changes, and lower-friction daily tracking.
-- Continue offline-first trip confidence work: clearer cached-data state and stronger route-readiness cues.
+- Owned-data depth is next: broader region coverage, cleaner route-wide import preparation, and more dependable local trip data.
+- Continue tightening the real trip daily loop with low-friction fixes that remove uncertainty on the road.
 - Replace the current Leaflet discovery surface with the planned MapLibre map and viewport-driven POI loading.
 - Push the owned-data model further with broader coverage and a deeper import pipeline.
 - Tighten deployment defaults further: environment-specific CORS, secrets handling, and homeserver-ready config.
@@ -78,14 +78,16 @@ Recent decisions affecting current work:
 
 - App must be usable within 1-2 months before trip departure — tight timeline
 - 100k+ POI data volume still requires proper viewport queries and spatial index validation once the real map lands.
-- The trip planner is now usable in alpha form, with city notes, route summaries, and city-level discovery suggestions.
+- The trip planner is now usable in alpha form, with city notes, route summaries, city-level discovery suggestions, and direct coverage/import readiness.
 - Search is noticeably better, and import quality is more resilient now. The planner can now also expose weak city coverage and queue imports directly, but a deeper import pipeline and broader owned-data coverage are still open.
+- Tracking is closer to a real group-trip workflow now because expenses can be re-split against the current participant set after the crew changes.
+- Route readiness is now visible enough for real pre-trip prep: you can see whether a route is ready, partial, or still importing.
 - Imports are now backgrounded and traceable, but they still depend on Overpass/Nominatim availability and app-process uptime.
 - There is still no separate worker or retry queue yet; jobs run inside the app process for alpha simplicity.
 - Local Docker validation is currently blocked by Docker Desktop returning `500 Internal Server Error` on daemon API calls.
 
 ## Session Continuity
 
-Last session: 2026-03-24T11:25:00+01:00
-Stopped at: Baseline hardening item 8 is complete; item 9 shared trip workflow hardening is next
+Last session: 2026-03-24T12:35:00+01:00
+Stopped at: Baseline hardening items 8-10 are complete; item 11 owned-data depth follow-up is next
 Resume file: .planning/NEXT-SEARCH-AND-TRIP-UX.md

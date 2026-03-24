@@ -190,7 +190,7 @@ Status: done
   - expense editing feels like part of the main flow, not a hidden edge case
   - users can recover from a changed group setup without data confusion
   - key tracking actions stay comfortable on mobile
-Status: next
+Status: done
 
 ### Item 10: Offline-first trip confidence
 - Make the app clearer about what is already cached locally versus still dependent on fresh imports.
@@ -199,7 +199,7 @@ Status: next
   - a user can tell whether a trip is ready to use on the road
   - the smoke script checks the most important baseline endpoints
   - Portainer deploy regressions are easier to spot quickly
-Status: in_progress
+Status: done
 
 ### Item 11: Owned data depth follow-up
 - Push the owned-data model further:
@@ -209,4 +209,4 @@ Status: in_progress
 - Success criteria:
   - route planning does not rely on a lucky narrow import set
   - the local database becomes progressively more useful per trip
-Status: planned
+Status: next

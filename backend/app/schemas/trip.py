@@ -151,6 +151,9 @@ class TripOverviewCityCoverageResponse(BaseModel):
     summary: str
     needs_import: bool
     last_imported_at: datetime | None = None
+    active_import_job_id: str | None = None
+    active_import_status: str | None = None
+    active_import_created_at: datetime | None = None
 
 
 class TripOverviewCoverageSummaryResponse(BaseModel):
@@ -159,6 +162,9 @@ class TripOverviewCoverageSummaryResponse(BaseModel):
     thin: int
     missing: int
     needs_import: int
+    queued_imports: int
+    running_imports: int
+    route_readiness: str
 
 
 class TripOverviewResponse(BaseModel):

@@ -69,6 +69,30 @@
           </div>
         </section>
 
+        <section
+          v-if="activeTrip && activeParticipants.length && expensesNeedingResplit.length"
+          class="tracking-callout tracking-callout--warning"
+        >
+          <div>
+            <p class="card-eyebrow">Shared split check</p>
+            <h4>{{ expensesNeedingResplit.length }} expense{{ expensesNeedingResplit.length === 1 ? '' : 's' }} use an older split setup</h4>
+            <p class="muted">
+              Your current trip crew has {{ activeParticipants.length }} people, but some recorded expenses still use an older split. You can re-split them all to the current crew in one step.
+            </p>
+          </div>
+          <div class="trip-actions">
+            <button
+              class="action-button"
+              type="button"
+              :disabled="rebalancingExpenses"
+              @click="onRebalanceExpenses"
+            >
+              {{ rebalancingExpenses ? 'Re-splitting...' : `Re-split ${expensesNeedingResplit.length} expenses` }}
+            </button>
+          </div>
+          <p v-if="rebalanceFeedback" class="feedback">{{ rebalanceFeedback }}</p>
+        </section>
+
         <section v-if="activeTrip && !activeParticipants.length" class="tracking-callout">
           <p class="card-eyebrow">Participants needed</p>
           <h4>Add your travel crew first</h4>
@@ -206,10 +230,15 @@
                   <span>{{ formatMoney(item.amount, expForm.currency || 'EUR') }}</span>
                 </article>
               </div>
+              <div v-if="activeParticipants.length" class="trip-actions">
+                <button class="secondary-button action-button" type="button" @click="selectAllParticipants">
+                  Use current trip crew
+                </button>
+              </div>
               <p v-if="expenseFeedback" class="feedback">{{ expenseFeedback }}</p>
               <p v-if="expenseHint" class="muted">{{ expenseHint }}</p>
               <p v-if="editingExpenseId" class="muted">
-                Existing expenses only change when you save this edit. Adding new participants does not rewrite old splits automatically.
+                Existing expenses only change when you save this edit. If the crew changed since this expense was logged, you can also use the trip-wide re-split action above.
               </p>
             </form>
           </section>
@@ -398,19 +427,32 @@ const summaryItems = computed(() => trackingStore.summary?.data || [])
 const summaryTotal = computed(() => trackingStore.summary?.total_amount || 0)
 const summaryCurrency = computed(() => trackingStore.summary?.currency || 'EUR')
 const settlementGroups = computed(() => trackingStore.settlements?.data || [])
+const expensesNeedingResplit = computed(() => {
+  const currentIds = [...activeParticipants.value].map((participant) => participant.id).sort()
+  if (!currentIds.length) return []
+  return expenses.value.filter((expense) => {
+    const splitIds = [...(expense.split_participant_ids || [])].sort()
+    if (splitIds.length !== currentIds.length) return true
+    return splitIds.some((id, index) => id !== currentIds[index])
+  })
+})
 const splitPreview = computed(() => {
   const total = Number(expForm.amount)
   const participantIds = expForm.split_participant_ids || []
   if (!participantIds.length || !Number.isFinite(total) || total <= 0) return []
 
-  const share = total / participantIds.length
-  const rounded = share.toFixed(2)
+  const totalCents = Math.round(total * 100)
+  const baseCents = Math.floor(totalCents / participantIds.length)
+  let remainder = totalCents - baseCents * participantIds.length
+
   return participantIds.map((participantId) => {
     const participant = activeParticipants.value.find((entry) => entry.id === participantId)
+    const cents = baseCents + (remainder > 0 ? 1 : 0)
+    remainder = Math.max(0, remainder - 1)
     return {
       participantId,
       name: participant?.name || 'Unknown participant',
-      amount: Number(rounded),
+      amount: cents / 100,
     }
   })
 })
@@ -467,8 +509,10 @@ const visForm = reactive({
 
 const savingExpense = ref(false)
 const savingVisit = ref(false)
+const rebalancingExpenses = ref(false)
 const expenseFeedback = ref('')
 const visitFeedback = ref('')
+const rebalanceFeedback = ref('')
 const editingExpenseId = ref('')
 
 const canSubmitExpense = computed(() => {
@@ -493,6 +537,7 @@ watch(
     visForm.trip_id = tripId || ''
     expenseFeedback.value = ''
     visitFeedback.value = ''
+    rebalanceFeedback.value = ''
     resetExpenseForm()
     await trackingStore.fetchAll(tripId || '')
   },
@@ -573,6 +618,7 @@ function loadExpenseIntoForm(expense) {
 
 async function onAddExpense() {
   expenseFeedback.value = ''
+  rebalanceFeedback.value = ''
   if (!activeTrip.value) {
     expenseFeedback.value = 'Select a trip first.'
     return
@@ -622,6 +668,7 @@ async function onAddExpense() {
 
 async function onAddVisit() {
   visitFeedback.value = ''
+  rebalanceFeedback.value = ''
   if (!activeTrip.value) {
     visitFeedback.value = 'Select a trip first.'
     return
@@ -650,6 +697,30 @@ async function onDeleteExpense(id) {
   await trackingStore.deleteExpense(id)
   if (editingExpenseId.value === id) {
     resetExpenseForm()
+  }
+}
+
+async function onRebalanceExpenses() {
+  if (!activeTrip.value || !expensesNeedingResplit.value.length) return
+  rebalancingExpenses.value = true
+  expenseFeedback.value = ''
+  rebalanceFeedback.value = ''
+  try {
+    const payload = await trackingStore.rebalanceExpenses({
+      trip_id: activeTrip.value.id,
+      expense_ids: expensesNeedingResplit.value.map((expense) => expense.id),
+    })
+    rebalanceFeedback.value = payload.message
+    if (editingExpenseId.value) {
+      const updatedExpense = trackingStore.expenses.find((expense) => expense.id === editingExpenseId.value)
+      if (updatedExpense) {
+        loadExpenseIntoForm(updatedExpense)
+      }
+    }
+  } catch (error) {
+    rebalanceFeedback.value = error.message || 'Could not re-split expenses.'
+  } finally {
+    rebalancingExpenses.value = false
   }
 }
 
