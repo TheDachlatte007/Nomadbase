@@ -67,7 +67,7 @@ The repo now contains a working alpha data flow for `places` and `saves`, includ
 **Plans**: TBD
 
 Current reality note:
-Trip creation, ordered city routes, participant management, city-assigned trip saves, route summaries, city-level discovery suggestions, per-stop coverage/import readiness, and route-level readiness status are now live in alpha form. The map page now also reflects the active route directly. The biggest open pieces are deeper import quality, broader data coverage, and later search/import depth.
+Trip creation, ordered city routes, participant management, city-assigned trip saves, route summaries, city-level discovery suggestions, per-stop coverage/import readiness, route-level readiness status, and automatic city geocoding are now live in alpha form. The map page now also reflects the active route directly. The biggest open pieces are deeper import quality, broader data coverage, and later search/import depth.
 
 ### Phase 4: Tracking
 **Goal**: Users can record what they spend and where they go, and see a summary of expenses by category

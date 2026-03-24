@@ -109,6 +109,10 @@
                   <strong>{{ overview.cities_without_places }}</strong>
                   <span class="muted">stops still missing a shortlist</span>
                 </article>
+                <article class="summary-item">
+                  <strong>{{ overview.cities_without_coordinates }}</strong>
+                  <span class="muted">stops still missing map coordinates</span>
+                </article>
               </div>
               <TripRoutePlanner v-if="overview.cities.length || overview.unassigned_places.length" :overview="overview" />
               <p v-else class="muted">Add cities first to build a route overview.</p>
@@ -137,7 +141,10 @@
                     :key="city.id"
                     class="city-list-item"
                   >
-                    <span>{{ city.sort_order + 1 }}. {{ city.name }}{{ city.country ? `, ${city.country}` : '' }}</span>
+                    <span>
+                      {{ city.sort_order + 1 }}. {{ city.name }}{{ city.country ? `, ${city.country}` : '' }}
+                      <span v-if="city.lat === null || city.lon === null" class="muted">· map pending</span>
+                    </span>
                     <div class="city-actions">
                       <button
                         class="secondary-button action-button city-order-btn"

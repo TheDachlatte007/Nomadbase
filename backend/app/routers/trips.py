@@ -1,4 +1,5 @@
 import math
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -28,9 +29,11 @@ from app.schemas.trip import (
     TripResponse,
     TripUpdateRequest,
 )
+from app.services.overpass import geocode_city
 from app.services.import_jobs import enqueue_import_jobs
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 DISCOVERY_TYPE_BONUSES = {
     "attraction": 22,
@@ -145,6 +148,7 @@ def _build_route_highlights(
     assigned_saved_places: int,
     unassigned_saved_places: int,
     cities_without_places: int,
+    cities_without_coordinates: int,
     top_place_types: dict[str, int],
 ) -> list[str]:
     highlights = [f"{city_count} stops planned for {participant_count or 1} traveler(s)"]
@@ -157,6 +161,8 @@ def _build_route_highlights(
         highlights.append(f"{unassigned_saved_places} saved places still need a city")
     if cities_without_places:
         highlights.append(f"{cities_without_places} stops still need their first shortlist")
+    if cities_without_coordinates:
+        highlights.append(f"{cities_without_coordinates} stops still need map coordinates")
     if top_place_types:
         top_entries = sorted(
             top_place_types.items(), key=lambda item: (-item[1], item[0])
@@ -223,6 +229,27 @@ def _build_discovery_reason(
         reasons.append("Good outdoor break")
 
     return " · ".join(reasons[:2]) or "Relevant for this route stop"
+
+
+async def _resolve_city_location(
+    *,
+    city_name: str,
+    country: str | None,
+    lat: float | None = None,
+    lon: float | None = None,
+):
+    if lat is not None and lon is not None:
+        return WKTElement(f"POINT({lon} {lat})", srid=4326)
+
+    geocoded = await geocode_city(city_name, country)
+    if geocoded and geocoded.get("lat") is not None and geocoded.get("lon") is not None:
+        return WKTElement(
+            f"POINT({geocoded['lon']} {geocoded['lat']})",
+            srid=4326,
+        )
+
+    logger.info("City geocoding did not resolve coordinates for %s, %s", city_name, country)
+    return None
 
 
 async def _load_city_discovery_candidates(
@@ -687,6 +714,7 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
         "thin": 0,
         "missing": 0,
         "needs_import": 0,
+        "unmapped_cities": 0,
         "queued_imports": 0,
         "running_imports": 0,
         "route_readiness": "needs_imports",
@@ -708,8 +736,14 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
             coverage_counts["queued_imports"] += 1
         elif city_entry["coverage"]["active_import_status"] == "running":
             coverage_counts["running_imports"] += 1
+        if city_entry.get("lat") is None or city_entry.get("lon") is None:
+            coverage_counts["unmapped_cities"] += 1
 
-    if coverage_counts["missing"] == 0 and coverage_counts["thin"] == 0:
+    if (
+        coverage_counts["missing"] == 0
+        and coverage_counts["thin"] == 0
+        and coverage_counts["unmapped_cities"] == 0
+    ):
         coverage_counts["route_readiness"] = "ready"
     elif coverage_counts["running_imports"] or coverage_counts["queued_imports"]:
         coverage_counts["route_readiness"] = "importing"
@@ -737,6 +771,11 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
     cities_without_places = sum(
         1 for city_entry in city_map.values() if city_entry["saved_count"] == 0
     )
+    cities_without_coordinates = sum(
+        1
+        for city_entry in city_map.values()
+        if city_entry["lat"] is None or city_entry["lon"] is None
+    )
     city_names = [row.name for row in city_rows]
 
     return {
@@ -752,6 +791,7 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
         if route_distance_km is not None
         else None,
         "cities_without_places": cities_without_places,
+        "cities_without_coordinates": cities_without_coordinates,
         "route_highlights": _build_route_highlights(
             city_count=len(city_rows),
             participant_count=participant_count,
@@ -759,6 +799,7 @@ async def _load_trip_overview_payload(db: AsyncSession, trip_id: UUID) -> dict:
             assigned_saved_places=assigned_saved_places,
             unassigned_saved_places=unassigned_saved_places,
             cities_without_places=cities_without_places,
+            cities_without_coordinates=cities_without_coordinates,
             top_place_types=assigned_place_type_totals,
         ),
         "coverage_summary": coverage_counts,
@@ -815,9 +856,12 @@ async def add_city_to_trip(
     if await db.get(Trip, trip_uuid) is None:
         raise HTTPException(status_code=404, detail="Trip not found")
 
-    location = None
-    if payload.lat is not None and payload.lon is not None:
-        location = WKTElement(f"POINT({payload.lon} {payload.lat})", srid=4326)
+    location = await _resolve_city_location(
+        city_name=payload.name,
+        country=payload.country,
+        lat=payload.lat,
+        lon=payload.lon,
+    )
 
     next_sort_order = (
         await db.scalar(
@@ -862,6 +906,13 @@ async def update_trip_city(
         city.notes = payload.notes
     if payload.lat is not None and payload.lon is not None:
         city.location = WKTElement(f"POINT({payload.lon} {payload.lat})", srid=4326)
+    elif payload.name is not None or payload.country is not None:
+        resolved_location = await _resolve_city_location(
+            city_name=city.name,
+            country=city.country,
+        )
+        if resolved_location is not None:
+            city.location = resolved_location
 
     await db.commit()
     return TripResponse(**await _load_trip_payload(db, trip_uuid))

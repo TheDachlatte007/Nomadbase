@@ -162,6 +162,7 @@ class TripOverviewCoverageSummaryResponse(BaseModel):
     thin: int
     missing: int
     needs_import: int
+    unmapped_cities: int
     queued_imports: int
     running_imports: int
     route_readiness: str
@@ -178,6 +179,7 @@ class TripOverviewResponse(BaseModel):
     route_label: str
     route_distance_km: float | None = None
     cities_without_places: int
+    cities_without_coordinates: int
     route_highlights: list[str]
     coverage_summary: TripOverviewCoverageSummaryResponse
     cities: list[TripOverviewCityResponse]

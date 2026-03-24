@@ -209,4 +209,4 @@ Status: done
 - Success criteria:
   - route planning does not rely on a lucky narrow import set
   - the local database becomes progressively more useful per trip
-Status: next
+Status: in_progress

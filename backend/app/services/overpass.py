@@ -209,6 +209,8 @@ async def geocode_city(city: str, country: str | None = None) -> dict | None:
         "north": float(bb[1]),
         "west": float(bb[2]),
         "east": float(bb[3]),
+        "lat": float(results[0].get("lat")) if results[0].get("lat") is not None else None,
+        "lon": float(results[0].get("lon")) if results[0].get("lon") is not None else None,
         "display_name": results[0].get("display_name", city),
         "normalized_region": _normalize_region(results[0], city, country),
     }

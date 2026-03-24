@@ -294,8 +294,14 @@ const routeReadinessCopy = computed(() => {
     case 'importing':
       return `${summary.queued_imports + summary.running_imports} stop import(s) are queued or running right now.`
     case 'partial':
+      if (summary.unmapped_cities) {
+        return `${summary.unmapped_cities} stop(s) still need map coordinates, and ${summary.thin + summary.missing} stop(s) need stronger local coverage.`
+      }
       return `${summary.thin + summary.missing} stop(s) still need stronger local coverage before departure.`
     default:
+      if (summary.unmapped_cities) {
+        return `${summary.unmapped_cities} stop(s) still need map coordinates before the route can feel reliable.`
+      }
       return 'Queue the missing stops so the trip works more reliably on the road.'
   }
 })

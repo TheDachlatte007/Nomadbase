@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Baseline hardening items 8-10 are complete; item 11 owned-data depth follow-up is next
-last_updated: "2026-03-24T12:35:00+01:00"
-last_activity: 2026-03-24 — Trip planning now exposes route readiness directly, including queued/running import state for weak stops
+stopped_at: Item 11 owned-data depth follow-up started with automatic city geocoding and stronger route prep
+last_updated: "2026-03-24T13:05:00+01:00"
+last_activity: 2026-03-24 — Trip cities now auto-geocode on create/update so route distance, coverage, and import prep work more reliably
 progress:
   total_phases: 5
   completed_phases: 0
@@ -67,7 +67,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Owned-data depth is next: broader region coverage, cleaner route-wide import preparation, and more dependable local trip data.
+- Owned-data depth is underway: automatic city geocoding is in, and the next follow-up is broader region coverage plus cleaner route-wide import preparation.
 - Continue tightening the real trip daily loop with low-friction fixes that remove uncertainty on the road.
 - Replace the current Leaflet discovery surface with the planned MapLibre map and viewport-driven POI loading.
 - Push the owned-data model further with broader coverage and a deeper import pipeline.
@@ -82,12 +82,13 @@ Recent decisions affecting current work:
 - Search is noticeably better, and import quality is more resilient now. The planner can now also expose weak city coverage and queue imports directly, but a deeper import pipeline and broader owned-data coverage are still open.
 - Tracking is closer to a real group-trip workflow now because expenses can be re-split against the current participant set after the crew changes.
 - Route readiness is now visible enough for real pre-trip prep: you can see whether a route is ready, partial, or still importing.
+- Trip cities now try to geocode themselves automatically, which makes route distance, planner maps, and city-level coverage more dependable without manual coordinates.
 - Imports are now backgrounded and traceable, but they still depend on Overpass/Nominatim availability and app-process uptime.
 - There is still no separate worker or retry queue yet; jobs run inside the app process for alpha simplicity.
 - Local Docker validation is currently blocked by Docker Desktop returning `500 Internal Server Error` on daemon API calls.
 
 ## Session Continuity
 
-Last session: 2026-03-24T12:35:00+01:00
-Stopped at: Baseline hardening items 8-10 are complete; item 11 owned-data depth follow-up is next
+Last session: 2026-03-24T13:05:00+01:00
+Stopped at: Item 11 owned-data depth follow-up started with automatic city geocoding and stronger route prep
 Resume file: .planning/NEXT-SEARCH-AND-TRIP-UX.md
