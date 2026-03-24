@@ -1,18 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import MapView from '../views/MapView.vue'
-import SavedView from '../views/SavedView.vue'
-import TripsView from '../views/TripsView.vue'
-import TrackingView from '../views/TrackingView.vue'
-import MoreView from '../views/MoreView.vue'
 
 export default createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', redirect: '/map' },
-    { path: '/map', name: 'map', component: MapView },
-    { path: '/saved', name: 'saved', component: SavedView },
-    { path: '/trips', name: 'trips', component: TripsView },
-    { path: '/tracking', name: 'tracking', component: TrackingView },
-    { path: '/more', name: 'more', component: MoreView },
+    { path: '/map', name: 'map', component: () => import('../views/MapView.vue') },
+    { path: '/saved', name: 'saved', component: () => import('../views/SavedView.vue') },
+    { path: '/trips', name: 'trips', component: () => import('../views/TripsView.vue') },
+    { path: '/tracking', name: 'tracking', component: () => import('../views/TrackingView.vue') },
+    { path: '/more', name: 'more', component: () => import('../views/MoreView.vue') },
   ],
 })

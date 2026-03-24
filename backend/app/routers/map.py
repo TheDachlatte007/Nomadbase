@@ -95,6 +95,27 @@ _STOP_WORDS = {
 }
 
 
+def _parse_bbox(bbox: str | None) -> tuple[float, float, float, float] | None:
+    if not bbox:
+        return None
+
+    try:
+        west, south, east, north = [float(part.strip()) for part in bbox.split(",")]
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="bbox must be west,south,east,north",
+        ) from exc
+
+    if west >= east or south >= north:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="bbox coordinates are invalid",
+        )
+
+    return west, south, east, north
+
+
 @router.get("/")
 async def map_root():
     return {
@@ -362,6 +383,7 @@ async def list_places(
     region: str | None = None,
     trip_id: str | None = None,
     q: str | None = None,
+    bbox: str | None = Query(default=None, description="west,south,east,north"),
     tag_filters: str | None = Query(default=None, description="Comma-separated tag keys, e.g. vegan,outdoor_seating"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -378,10 +400,19 @@ async def list_places(
 
     filters = []
     trip_city_rows = []
+    parsed_bbox = _parse_bbox(bbox)
     if effective_place_type:
         filters.append(Place.place_type == effective_place_type)
     if region:
         filters.append(Place.region.ilike(f"%{region.strip()}%"))
+    if parsed_bbox:
+        west, south, east, north = parsed_bbox
+        filters.append(
+            func.ST_Intersects(
+                Place.location,
+                func.ST_MakeEnvelope(west, south, east, north, 4326),
+            )
+        )
     if trip_id:
         trip_uuid = _parse_uuid(trip_id, "trip_id")
         trip_city_rows = (
@@ -495,6 +526,8 @@ async def list_places(
         summary_bits.extend(free_text_terms)
     if region:
         summary_bits.append(region.strip())
+    if parsed_bbox:
+        summary_bits.append("viewport")
     message = (
         f"Ranked for {' · '.join(summary_bits)}"
         if data and summary_bits

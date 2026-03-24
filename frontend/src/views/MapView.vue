@@ -206,13 +206,22 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import L from 'leaflet'
-import 'leaflet.markercluster'
 import { useRoute } from 'vue-router'
 import { useAdminStore } from '../stores/admin.js'
 import { usePlacesStore } from '../stores/places.js'
 import { useSavedStore } from '../stores/saved.js'
 import { useTripsStore } from '../stores/trips.js'
+import {
+  boundsToBboxString,
+  cityToFeature,
+  createRasterStyle,
+  escapeHtml,
+  featureCollection,
+  fitMapToCoordinates,
+  maplibregl,
+  placeToFeature,
+  routeLineFeature,
+} from '../utils/maplibre.js'
 
 const route = useRoute()
 const placesStore = usePlacesStore()
@@ -377,161 +386,365 @@ function getDisplayTags(place) {
   return chips.slice(0, 4)
 }
 
-const TYPE_COLORS = {
-  park: '#2d7a2d',
-  restaurant: '#c86f31',
-  cafe: '#8b5e3c',
-  cultural: '#5b4a8a',
-  attraction: '#0f5c52',
-  hiking: '#1a6e4a',
-  viewpoint: '#1a5c8a',
-  stay: '#8c4f6f',
-  essentials: '#7a6336',
-  transport: '#355d8a',
+let map = null
+let mapReady = false
+let activePopup = null
+let viewportTimer = null
+let lastRouteFitKey = ''
+let lastPlacesFitKey = ''
+let suppressViewportFetchUntil = 0
+
+function buildPlacePopupHtml(place) {
+  const links = [
+    place.website_url
+      ? `<a href="${escapeHtml(place.website_url)}" target="_blank" rel="noreferrer">Website</a>`
+      : '',
+    place.wikipedia_url
+      ? `<a href="${escapeHtml(place.wikipedia_url)}" target="_blank" rel="noreferrer">Wikipedia</a>`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  return `
+    <div class="map-popup">
+      <strong>${escapeHtml(place.name)}</strong>
+      <div class="map-popup__meta">${escapeHtml(place.context_line || place.place_type)}</div>
+      ${
+        place.description
+          ? `<div class="map-popup__body">${escapeHtml(place.description)}</div>`
+          : ''
+      }
+      ${links ? `<div class="map-popup__links">${links}</div>` : ''}
+    </div>
+  `
 }
 
-let map = null
-let clusterGroup = null
-let routeLayerGroup = null
-const placeMarkers = new Map()
-let userMarker = null
+function scrollCardIntoView(placeId) {
+  const card = document.querySelector(`[data-place-id="${placeId}"]`)
+  if (!card) return
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  card.classList.add('map-highlight')
+  setTimeout(() => card.classList.remove('map-highlight'), 1800)
+}
 
-function makeMarkerIcon(type) {
-  const color = TYPE_COLORS[type] || '#5f6d69'
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="34" viewBox="0 0 24 34">
-    <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0z" fill="${color}" stroke="white" stroke-width="1.5"/>
-    <circle cx="12" cy="12" r="5" fill="white"/>
-  </svg>`
-  return L.divIcon({ html: svg, className: '', iconSize: [24, 34], iconAnchor: [12, 34], popupAnchor: [0, -34] })
+function openPlacePopup(place, coordinates = [place.lon, place.lat]) {
+  if (!map) return
+  activePopup?.remove()
+  activePopup = new maplibregl.Popup({ closeButton: false, offset: 14 })
+    .setLngLat(coordinates)
+    .setHTML(buildPlacePopupHtml(place))
+    .addTo(map)
+}
+
+function setSourceData(sourceId, data) {
+  const source = map?.getSource(sourceId)
+  if (source) {
+    source.setData(data)
+  }
+}
+
+function syncMapSources() {
+  if (!mapReady || !map) return
+
+  setSourceData(
+    'places',
+    featureCollection(places.value.map((place) => placeToFeature(place)))
+  )
+
+  const routeCities = (tripOverview.value?.cities || [])
+    .map((city) => cityToFeature(city))
+    .filter(Boolean)
+  setSourceData('route-cities', featureCollection(routeCities))
+
+  const routeLine = routeLineFeature(tripOverview.value?.cities || [])
+  setSourceData('route-line', featureCollection(routeLine ? [routeLine] : []))
+}
+
+function maybeFitRouteToMap() {
+  const cities = (tripOverview.value?.cities || []).filter(
+    (city) => city.lat !== null && city.lon !== null
+  )
+  if (!cities.length) return
+  const fitKey = `${selectedTripId.value}:${cities.map((city) => city.id).join(',')}`
+  if (fitKey === lastRouteFitKey) return
+  lastRouteFitKey = fitKey
+  fitMapToCoordinates(
+    map,
+    cities.map((city) => [city.lon, city.lat]),
+    { maxZoom: 11, padding: 56 }
+  )
+}
+
+function maybeFitPlacesToMap() {
+  if (!places.value.length || selectedTripId.value) return
+  const fitKey = `${searchQuery.value}|${placeType.value}|${selectedRegion.value}|${places.value.length}|${places.value[0]?.id || ''}`
+  if (fitKey === lastPlacesFitKey) return
+  lastPlacesFitKey = fitKey
+  fitMapToCoordinates(
+    map,
+    places.value.map((place) => [place.lon, place.lat]),
+    { maxZoom: 12, padding: 48 }
+  )
+}
+
+function applyCursor(layerId) {
+  map.on('mouseenter', layerId, () => {
+    map.getCanvas().style.cursor = 'pointer'
+  })
+  map.on('mouseleave', layerId, () => {
+    map.getCanvas().style.cursor = ''
+  })
+}
+
+function attachMapEvents() {
+  applyCursor('places-clusters')
+  applyCursor('places-points')
+  applyCursor('route-cities-points')
+
+  map.on('click', 'places-clusters', (event) => {
+    const feature = event.features?.[0]
+    if (!feature) return
+    const clusterId = feature.properties.cluster_id
+    map.getSource('places').getClusterExpansionZoom(clusterId, (error, zoom) => {
+      if (error) return
+      map.easeTo({
+        center: feature.geometry.coordinates,
+        zoom,
+        duration: 500,
+      })
+    })
+  })
+
+  map.on('click', 'places-points', (event) => {
+    const feature = event.features?.[0]
+    if (!feature) return
+    const place = places.value.find((item) => item.id === feature.properties.id)
+    if (!place) return
+    openPlacePopup(place, feature.geometry.coordinates.slice())
+    scrollCardIntoView(place.id)
+  })
+
+  map.on('click', 'route-cities-points', (event) => {
+    const feature = event.features?.[0]
+    if (!feature) return
+    const city = tripOverview.value?.cities?.find((item) => item.id === feature.properties.id)
+    if (!city) return
+    map.easeTo({
+      center: [city.lon, city.lat],
+      zoom: Math.max(map.getZoom(), 11),
+      duration: 500,
+    })
+  })
+
+  map.on('moveend', () => {
+    clearTimeout(viewportTimer)
+    viewportTimer = setTimeout(() => {
+      if (!mapReady) return
+      if (Date.now() < suppressViewportFetchUntil) return
+      runSearch({ useViewport: true }).catch(() => {})
+    }, 180)
+  })
+}
+
+function initMap() {
+  map = new maplibregl.Map({
+    container: mapEl.value,
+    style: createRasterStyle(),
+    center: [10, 20],
+    zoom: 2,
+  })
+
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
+
+  map.on('load', () => {
+    map.addSource('places', {
+      type: 'geojson',
+      data: featureCollection(),
+      cluster: true,
+      clusterMaxZoom: 13,
+      clusterRadius: 48,
+    })
+    map.addLayer({
+      id: 'places-clusters',
+      type: 'circle',
+      source: 'places',
+      filter: ['has', 'point_count'],
+      paint: {
+        'circle-color': [
+          'step',
+          ['get', 'point_count'],
+          '#d7ebe7',
+          20,
+          '#0f5c52',
+          80,
+          '#c86f31',
+        ],
+        'circle-radius': ['step', ['get', 'point_count'], 18, 20, 24, 80, 30],
+        'circle-stroke-color': '#fff',
+        'circle-stroke-width': 2,
+      },
+    })
+    map.addLayer({
+      id: 'places-cluster-count',
+      type: 'symbol',
+      source: 'places',
+      filter: ['has', 'point_count'],
+      layout: {
+        'text-field': ['get', 'point_count_abbreviated'],
+        'text-size': 12,
+        'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      },
+      paint: {
+        'text-color': '#f8f6f1',
+      },
+    })
+    map.addLayer({
+      id: 'places-points',
+      type: 'circle',
+      source: 'places',
+      filter: ['!', ['has', 'point_count']],
+      paint: {
+        'circle-color': ['coalesce', ['get', 'color'], '#5f6d69'],
+        'circle-radius': 7,
+        'circle-stroke-color': '#fff',
+        'circle-stroke-width': 2,
+      },
+    })
+
+    map.addSource('route-line', {
+      type: 'geojson',
+      data: featureCollection(),
+    })
+    map.addLayer({
+      id: 'route-line-layer',
+      type: 'line',
+      source: 'route-line',
+      paint: {
+        'line-color': '#0f5c52',
+        'line-width': 3,
+        'line-dasharray': [2, 2],
+        'line-opacity': 0.75,
+      },
+    })
+
+    map.addSource('route-cities', {
+      type: 'geojson',
+      data: featureCollection(),
+    })
+    map.addLayer({
+      id: 'route-cities-points',
+      type: 'circle',
+      source: 'route-cities',
+      paint: {
+        'circle-color': '#f8f6f1',
+        'circle-radius': 8,
+        'circle-stroke-color': '#0f5c52',
+        'circle-stroke-width': 3,
+      },
+    })
+    map.addLayer({
+      id: 'route-cities-labels',
+      type: 'symbol',
+      source: 'route-cities',
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-size': 11,
+        'text-offset': [0, 1.6],
+        'text-anchor': 'top',
+      },
+      paint: {
+        'text-color': '#1f2b2a',
+        'text-halo-color': '#fff9f0',
+        'text-halo-width': 1.2,
+      },
+    })
+
+    map.addSource('user-location', {
+      type: 'geojson',
+      data: featureCollection(),
+    })
+    map.addLayer({
+      id: 'user-location-point',
+      type: 'circle',
+      source: 'user-location',
+      paint: {
+        'circle-color': '#0f5c52',
+        'circle-radius': 7,
+        'circle-stroke-color': '#ffffff',
+        'circle-stroke-width': 3,
+      },
+    })
+
+    attachMapEvents()
+    mapReady = true
+    syncMapSources()
+    if (selectedTripId.value) {
+      maybeFitRouteToMap()
+    } else {
+      maybeFitPlacesToMap()
+    }
+  })
+}
+
+function destroyMap() {
+  activePopup?.remove()
+  activePopup = null
+  clearTimeout(viewportTimer)
+  if (map) map.remove()
+  map = null
+  mapReady = false
 }
 
 function focusOnMap(place) {
-  if (!map || !clusterGroup) return
-  const marker = placeMarkers.get(place.id)
-  if (marker) {
-    clusterGroup.zoomToShowLayer(marker, () => marker.openPopup())
-  } else {
-    map.setView([place.lat, place.lon], 15, { animate: true })
-  }
+  if (!map) return
+  map.easeTo({
+    center: [place.lon, place.lat],
+    zoom: 14.5,
+    duration: 600,
+  })
+  openPlacePopup(place)
 }
 
-function syncRouteOverlay(overview) {
-  if (!map || !routeLayerGroup) return
-  routeLayerGroup.clearLayers()
-
-  const cities = (overview?.cities || []).filter((city) => city.lat !== null && city.lon !== null)
-  if (!cities.length) return
-
-  if (cities.length > 1) {
-    L.polyline(
-      cities.map((city) => [city.lat, city.lon]),
-      {
-        color: '#0f5c52',
-        weight: 3,
-        opacity: 0.75,
-        dashArray: '6 8',
-      }
-    ).addTo(routeLayerGroup)
+watch(places, () => {
+  syncMapSources()
+  if (mapReady && !selectedTripId.value) {
+    maybeFitPlacesToMap()
   }
+}, { deep: true })
 
-  for (const city of cities) {
-    const marker = L.circleMarker([city.lat, city.lon], {
-      radius: 8,
-      color: '#0f5c52',
-      weight: 2,
-      fillColor: '#f8f6f1',
-      fillOpacity: 0.95,
-    }).addTo(routeLayerGroup)
-    marker.bindPopup(`<strong>${city.sort_order + 1}. ${city.name}</strong>`)
+watch(tripOverview, () => {
+  syncMapSources()
+  if (mapReady && selectedTripId.value) {
+    maybeFitRouteToMap()
   }
-}
-
-function syncMarkers(newPlaces) {
-  if (!map || !clusterGroup) return
-
-  const currentIds = new Set(newPlaces.map((place) => place.id))
-  for (const [id, marker] of placeMarkers) {
-    if (!currentIds.has(id)) {
-      clusterGroup.removeLayer(marker)
-      placeMarkers.delete(id)
-    }
-  }
-
-  const toAdd = []
-  for (const place of newPlaces) {
-    if (placeMarkers.has(place.id)) continue
-    const marker = L.marker([place.lat, place.lon], {
-      icon: makeMarkerIcon(place.place_type),
-      title: place.name,
-    })
-    marker.bindPopup(
-      `<strong>${place.name}</strong><br>
-       <span style="color:#5f6d69;font-size:.9em">${place.context_line || place.place_type}</span>
-       ${place.description ? `<br><span style="font-size:.88em">${place.description}</span>` : ''}`,
-      { maxWidth: 240 }
-    )
-    marker.on('click', () => {
-      const card = document.querySelector(`[data-place-id="${place.id}"]`)
-      if (card) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-        card.classList.add('map-highlight')
-        setTimeout(() => card.classList.remove('map-highlight'), 1800)
-      }
-    })
-    placeMarkers.set(place.id, marker)
-    toAdd.push(marker)
-  }
-
-  if (toAdd.length) clusterGroup.addLayers(toAdd)
-  if (newPlaces.length && placeMarkers.size) {
-    const group = L.featureGroup([...placeMarkers.values()])
-    map.fitBounds(group.getBounds().pad(0.2))
-  }
-}
-
-watch(places, syncMarkers)
-watch(tripOverview, syncRouteOverlay, { deep: true })
+}, { deep: true })
 
 onMounted(() => {
   adminStore.fetchImports().catch(() => {})
-  map = L.map(mapEl.value, { zoomControl: true }).setView([20, 10], 2)
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 19,
-  }).addTo(map)
-
-  clusterGroup = L.markerClusterGroup({
-    chunkedLoading: true,
-    maxClusterRadius: 60,
-    spiderfyOnMaxZoom: true,
-    showCoverageOnHover: false,
-  })
-  map.addLayer(clusterGroup)
-  routeLayerGroup = L.layerGroup().addTo(map)
-
-  if (places.value.length) syncMarkers(places.value)
+  initMap()
   if (selectedTripId.value) {
     tripsStore.fetchTripOverview(selectedTripId.value).catch(() => {})
   }
-  if (tripOverview.value) syncRouteOverlay(tripOverview.value)
 })
 
 onUnmounted(() => {
-  map?.remove()
-  map = null
-  clusterGroup = null
-  routeLayerGroup = null
-  placeMarkers.clear()
+  destroyMap()
 })
 
-function runSearch() {
+function runSearch(options = {}) {
   const tagStr = [...activeTagFilters].join(',')
+  const bbox =
+    options.useViewport && mapReady && map
+      ? boundsToBboxString(map.getBounds())
+      : ''
   return placesStore.fetchPlaces(
     searchQuery.value,
     placeType.value,
     tagStr,
     selectedTripId.value,
-    selectedRegion.value
+    selectedRegion.value,
+    bbox
   )
 }
 
@@ -542,17 +755,21 @@ function applyPreset(preset) {
   for (const tag of preset.tags || []) {
     activeTagFilters.add(tag)
   }
-  runSearch().catch(() => {})
+  runSearch({ useViewport: true }).catch(() => {})
 }
 
 function applyTripCity(city) {
   searchQuery.value = city.name
   const exactRegion = city.country ? `${city.name}, ${city.country}` : city.name
   selectedRegion.value = importedRegions.value.includes(exactRegion) ? exactRegion : ''
-  runSearch().catch(() => {})
   if (city.lat !== null && city.lon !== null) {
-    map?.setView([city.lat, city.lon], 12, { animate: true })
+    map?.easeTo({
+      center: [city.lon, city.lat],
+      zoom: 11.5,
+      duration: 600,
+    })
   }
+  runSearch({ useViewport: true }).catch(() => {})
 }
 
 function onScopeChange() {
@@ -561,7 +778,7 @@ function onScopeChange() {
   if (selectedTripId.value) {
     tripsStore.fetchTripOverview(selectedTripId.value).catch(() => {})
   }
-  runSearch().catch(() => {})
+  runSearch({ useViewport: true }).catch(() => {})
 }
 
 function toggleTagFilter(key) {
@@ -570,13 +787,13 @@ function toggleTagFilter(key) {
   } else {
     activeTagFilters.add(key)
   }
-  runSearch().catch(() => {})
+  runSearch({ useViewport: true }).catch(() => {})
 }
 
 async function onSearch() {
   importFeedback.value = ''
   tripsStore.setActiveTrip(selectedTripId.value)
-  await runSearch()
+  await runSearch({ useViewport: true })
 }
 
 async function onLoadMore() {
@@ -594,15 +811,30 @@ async function onNearMe() {
   navigator.geolocation.getCurrentPosition(
     async ({ coords }) => {
       try {
-        map?.setView([coords.latitude, coords.longitude], 14)
-        if (userMarker) userMarker.remove()
-        userMarker = L.circleMarker([coords.latitude, coords.longitude], {
-          radius: 8,
-          fillColor: '#0f5c52',
-          color: '#fff',
-          weight: 2,
-          fillOpacity: 0.9,
-        }).addTo(map).bindPopup('You are here').openPopup()
+        suppressViewportFetchUntil = Date.now() + 2200
+        map?.easeTo({
+          center: [coords.longitude, coords.latitude],
+          zoom: 13.5,
+          duration: 700,
+        })
+        setSourceData(
+          'user-location',
+          featureCollection([
+            {
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [coords.longitude, coords.latitude],
+              },
+              properties: {},
+            },
+          ])
+        )
+        activePopup?.remove()
+        activePopup = new maplibregl.Popup({ closeButton: false, offset: 12 })
+          .setLngLat([coords.longitude, coords.latitude])
+          .setHTML('<strong>You are here</strong>')
+          .addTo(map)
 
         const nearby = await placesStore.fetchNearby(coords.latitude, coords.longitude)
         nearMeText.value = `${nearby.length} nearby`
@@ -633,7 +865,7 @@ async function onInlineImport() {
       selectedRegion.value = result.region || selectedRegion.value
       importFeedback.value = `Imported ${result.imported_count} places for ${result.region || searchQuery.value}. Loading…`
       await adminStore.fetchImports().catch(() => {})
-      await runSearch()
+      await runSearch({ useViewport: true })
     }
   } catch (error) {
     importFeedback.value = `Import failed: ${error.message}`

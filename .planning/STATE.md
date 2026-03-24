@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Follow-up queue items 12-14 are complete
-last_updated: "2026-03-24T15:05:00+01:00"
-last_activity: 2026-03-24 — Route readiness now tracks core trip categories, city creation can auto-queue imports, and homeserver hardening envs were added
+stopped_at: Follow-up queue items 15-16 are complete
+last_updated: "2026-03-24T16:10:00+01:00"
+last_activity: 2026-03-24 — The map stack moved to MapLibre and place discovery can now follow the active viewport
 progress:
   total_phases: 5
   completed_phases: 0
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** A single app that answers: Where am I? What's around me? What do I want to see? What have I planned? What have I visited? What have I spent?
-**Current focus:** The compact follow-up queue is complete too; the next block should be a larger deliberate plan, not more small ad-hoc follow-ups
+**Current focus:** The map architecture is now materially closer to the target product; the next block should focus on deeper data and live deploy validation rather than more map churn
 
 ## Current Position
 
-Phase: Follow-up hardening complete for the current queue
-Plan: Create the next larger product block before continuing execution
+Phase: Map architecture refresh complete for the current queue
+Plan: Create the next larger product block around deeper import/data quality and live deployment validation
 Status: In progress
-Last activity: 2026-03-24 — Core trip coverage, import prep automation, and homeserver deploy defaults were tightened
+Last activity: 2026-03-24 — MapLibre replaced Leaflet for the main map surfaces and map queries became viewport-aware
 
-Progress: [██████████] 100% for the current follow-up queue
+Progress: [██████████] 100% for the current map refresh queue
 
 ## Performance Metrics
 
@@ -68,8 +68,7 @@ Recent decisions affecting current work:
 ### Pending Todos
 
 - Create the next deliberate larger work queue instead of continuing with tiny follow-up items.
-- The likely next themes are MapLibre migration, a deeper import pipeline beyond city-level Overpass pulls, and real homeserver/runtime validation.
-- Replace the current Leaflet discovery surface with the planned MapLibre map and viewport-driven POI loading.
+- The likely next themes are a deeper import pipeline beyond city-level Overpass pulls, better owned-data coverage along real routes, and real homeserver/runtime validation.
 - Push the owned-data model further with broader coverage, corridor/route prep, and a deeper import pipeline.
 - Tighten deployment defaults further: environment-specific CORS, secrets handling, and homeserver-ready config.
 - Validate the next Portainer deployment and fix any container/runtime regressions that show up there.
@@ -85,12 +84,14 @@ Recent decisions affecting current work:
 - Route readiness is now visible enough for real pre-trip prep: you can see whether a route is ready, partial, or still importing.
 - Route readiness is also more honest now because each city can expose missing core trip dimensions like food, stay, essentials, and transport.
 - Trip cities now try to geocode themselves automatically, which makes route distance, planner maps, and city-level coverage more dependable without manual coordinates.
+- The map stack now uses MapLibre instead of Leaflet for both the discovery map and the trip planner map.
+- Discovery queries can now be scoped to the active map viewport, which is a better fit for larger owned place datasets.
 - Imports are now backgrounded and traceable, and new trip cities can auto-queue their first import, but they still depend on Overpass/Nominatim availability and app-process uptime.
 - There is still no separate worker or retry queue yet; jobs run inside the app process for alpha simplicity.
 - Local Docker validation is currently blocked by Docker Desktop returning `500 Internal Server Error` on daemon API calls.
 
 ## Session Continuity
 
-Last session: 2026-03-24T15:05:00+01:00
-Stopped at: Follow-up queue items 12-14 are complete
+Last session: 2026-03-24T16:10:00+01:00
+Stopped at: Follow-up queue items 15-16 are complete
 Resume file: .planning/NEXT-SEARCH-AND-TRIP-UX.md

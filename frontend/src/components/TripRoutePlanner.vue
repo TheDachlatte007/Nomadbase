@@ -264,9 +264,17 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import L from 'leaflet'
 import { useSavedStore } from '../stores/saved.js'
 import { useTripsStore } from '../stores/trips.js'
+import {
+  cityToFeature,
+  createRasterStyle,
+  escapeHtml,
+  featureCollection,
+  fitMapToCoordinates,
+  maplibregl,
+  routeLineFeature,
+} from '../utils/maplibre.js'
 
 const props = defineProps({
   overview: {
@@ -332,7 +340,8 @@ const routeReadinessCopy = computed(() => {
 })
 
 let map = null
-let layerGroup = null
+let mapReady = false
+let activePopup = null
 
 watch(
   () => props.overview?.cities || [],
@@ -376,7 +385,11 @@ function summarizePlaceTypes(placeTypeCounts) {
 
 function focusCoordinates(lat, lon, zoom = 13) {
   if (!map || lat === null || lon === null) return
-  map.setView([lat, lon], zoom, { animate: true })
+  map.easeTo({
+    center: [lon, lat],
+    zoom,
+    duration: 550,
+  })
 }
 
 function placeColor(status) {
@@ -470,77 +483,211 @@ function buildCoverageFeedback(payload) {
   return `${reusedCount} existing import job(s) already running.`
 }
 
+function setSourceData(sourceId, data) {
+  const source = map?.getSource(sourceId)
+  if (source) {
+    source.setData(data)
+  }
+}
+
+function buildPlannerPopup(title, subtitle) {
+  return `
+    <div class="map-popup">
+      <strong>${escapeHtml(title)}</strong>
+      ${subtitle ? `<div class="map-popup__meta">${escapeHtml(subtitle)}</div>` : ''}
+    </div>
+  `
+}
+
+function plannerPointFeature(place, color, subtitle) {
+  return {
+    type: 'Feature',
+    geometry: {
+      type: 'Point',
+      coordinates: [place.lon, place.lat],
+    },
+    properties: {
+      id: place.saved_place_id || place.place_id,
+      name: place.name,
+      subtitle,
+      color,
+    },
+  }
+}
+
+function syncPlannerSources() {
+  if (!mapReady) return
+
+  const routeCitiesFeatures = routeCities.value
+    .map((city) => cityToFeature(city))
+    .filter(Boolean)
+  setSourceData('planner-route-cities', featureCollection(routeCitiesFeatures))
+
+  const routeFeature = routeLineFeature(props.overview?.cities || [])
+  setSourceData('planner-route-line', featureCollection(routeFeature ? [routeFeature] : []))
+
+  setSourceData(
+    'planner-assigned-places',
+    featureCollection(
+      assignedPlaces.value.map((place) =>
+        plannerPointFeature(place, placeColor(place.status), `${place.city_name || 'Assigned'} · ${humanizeStatus(place.status)}`)
+      )
+    )
+  )
+
+  setSourceData(
+    'planner-unassigned-places',
+    featureCollection(
+      (props.overview?.unassigned_places || []).map((place) =>
+        plannerPointFeature(place, '#8f7c6a', 'Unassigned trip save')
+      )
+    )
+  )
+}
+
+function attachPlannerMapEvents() {
+  const hoverLayers = [
+    'planner-route-cities-layer',
+    'planner-assigned-places-layer',
+    'planner-unassigned-places-layer',
+  ]
+  for (const layerId of hoverLayers) {
+    map.on('mouseenter', layerId, () => {
+      map.getCanvas().style.cursor = 'pointer'
+    })
+    map.on('mouseleave', layerId, () => {
+      map.getCanvas().style.cursor = ''
+    })
+  }
+
+  for (const layerId of hoverLayers) {
+    map.on('click', layerId, (event) => {
+      const feature = event.features?.[0]
+      if (!feature) return
+      const coordinates = feature.geometry.coordinates.slice()
+      activePopup?.remove()
+      activePopup = new maplibregl.Popup({ closeButton: false, offset: 12 })
+        .setLngLat(coordinates)
+        .setHTML(buildPlannerPopup(feature.properties.name, feature.properties.subtitle))
+        .addTo(map)
+    })
+  }
+}
+
 async function renderMap() {
   await nextTick()
   if (!mapEl.value) return
 
   if (!map) {
-    map = L.map(mapEl.value, { zoomControl: true, scrollWheelZoom: false }).setView([20, 10], 2)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(map)
-    layerGroup = L.layerGroup().addTo(map)
+    map = new maplibregl.Map({
+      container: mapEl.value,
+      style: createRasterStyle(),
+      center: [10, 20],
+      zoom: 2,
+    })
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
+    map.on('load', () => {
+      map.addSource('planner-route-line', {
+        type: 'geojson',
+        data: featureCollection(),
+      })
+      map.addLayer({
+        id: 'planner-route-line-layer',
+        type: 'line',
+        source: 'planner-route-line',
+        paint: {
+          'line-color': '#0f5c52',
+          'line-width': 3,
+          'line-dasharray': [2, 2],
+          'line-opacity': 0.8,
+        },
+      })
+
+      map.addSource('planner-route-cities', {
+        type: 'geojson',
+        data: featureCollection(),
+      })
+      map.addLayer({
+        id: 'planner-route-cities-layer',
+        type: 'circle',
+        source: 'planner-route-cities',
+        paint: {
+          'circle-color': '#d7ebe7',
+          'circle-radius': 8,
+          'circle-stroke-color': '#0f5c52',
+          'circle-stroke-width': 3,
+        },
+      })
+      map.addLayer({
+        id: 'planner-route-cities-labels',
+        type: 'symbol',
+        source: 'planner-route-cities',
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-size': 11,
+          'text-offset': [0, 1.5],
+          'text-anchor': 'top',
+        },
+        paint: {
+          'text-color': '#1f2b2a',
+          'text-halo-color': '#fff9f0',
+          'text-halo-width': 1.2,
+        },
+      })
+
+      map.addSource('planner-assigned-places', {
+        type: 'geojson',
+        data: featureCollection(),
+      })
+      map.addLayer({
+        id: 'planner-assigned-places-layer',
+        type: 'circle',
+        source: 'planner-assigned-places',
+        paint: {
+          'circle-color': ['coalesce', ['get', 'color'], '#5b4a8a'],
+          'circle-radius': 6,
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 1.5,
+        },
+      })
+
+      map.addSource('planner-unassigned-places', {
+        type: 'geojson',
+        data: featureCollection(),
+      })
+      map.addLayer({
+        id: 'planner-unassigned-places-layer',
+        type: 'circle',
+        source: 'planner-unassigned-places',
+        paint: {
+          'circle-color': '#8f7c6a',
+          'circle-radius': 5,
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 1.2,
+        },
+      })
+
+      attachPlannerMapEvents()
+      mapReady = true
+      syncPlannerSources()
+      renderMap().catch(() => {})
+    })
   }
 
-  layerGroup.clearLayers()
-  const boundsPoints = []
+  if (!mapReady) return
 
-  if (routeCities.value.length > 1) {
-    const path = routeCities.value.map((city) => [city.lat, city.lon])
-    L.polyline(path, {
-      color: '#0f5c52',
-      weight: 3,
-      opacity: 0.8,
-      dashArray: '6 8',
-    }).addTo(layerGroup)
-    boundsPoints.push(...path)
-  }
+  syncPlannerSources()
 
-  for (const city of routeCities.value) {
-    const marker = L.circleMarker([city.lat, city.lon], {
-      radius: 8,
-      color: '#0f5c52',
-      weight: 2,
-      fillColor: '#d7ebe7',
-      fillOpacity: 0.95,
-    }).addTo(layerGroup)
-    marker.bindPopup(`<strong>${city.sort_order + 1}. ${city.name}</strong>`)
-    boundsPoints.push([city.lat, city.lon])
-  }
+  const coordinates = [
+    ...routeCities.value.map((city) => [city.lon, city.lat]),
+    ...assignedPlaces.value.map((place) => [place.lon, place.lat]),
+    ...(props.overview?.unassigned_places || []).map((place) => [place.lon, place.lat]),
+  ]
 
-  for (const place of assignedPlaces.value) {
-    const marker = L.circleMarker([place.lat, place.lon], {
-      radius: 6,
-      color: '#fff',
-      weight: 1.5,
-      fillColor: placeColor(place.status),
-      fillOpacity: 0.95,
-    }).addTo(layerGroup)
-    marker.bindPopup(
-      `<strong>${place.name}</strong><br><span style="color:#5f6d69">${place.city_name || 'Unassigned'} · ${humanizeStatus(place.status)}</span>`
-    )
-    boundsPoints.push([place.lat, place.lon])
-  }
-
-  for (const place of props.overview?.unassigned_places || []) {
-    const marker = L.circleMarker([place.lat, place.lon], {
-      radius: 5,
-      color: '#fff',
-      weight: 1.2,
-      fillColor: '#8f7c6a',
-      fillOpacity: 0.85,
-    }).addTo(layerGroup)
-    marker.bindPopup(
-      `<strong>${place.name}</strong><br><span style="color:#5f6d69">Unassigned trip save</span>`
-    )
-    boundsPoints.push([place.lat, place.lon])
-  }
-
-  if (boundsPoints.length) {
-    map.fitBounds(boundsPoints, { padding: [28, 28] })
+  if (coordinates.length) {
+    fitMapToCoordinates(map, coordinates, { maxZoom: 13, padding: 34 })
   } else {
-    map.setView([20, 10], 2)
+    map.easeTo({ center: [10, 20], zoom: 2, duration: 400 })
   }
 }
 
@@ -557,8 +704,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  activePopup?.remove()
+  activePopup = null
   map?.remove()
   map = null
-  layerGroup = null
+  mapReady = false
 })
 </script>

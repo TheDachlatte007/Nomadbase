@@ -766,6 +766,49 @@ code {
   overflow: hidden;
 }
 
+#map-view .maplibregl-canvas,
+.route-map .maplibregl-canvas {
+  cursor: grab;
+}
+
+#map-view .maplibregl-canvas:active,
+.route-map .maplibregl-canvas:active {
+  cursor: grabbing;
+}
+
+.maplibregl-popup-content {
+  border-radius: 14px;
+  padding: 0.85rem 0.95rem;
+  background: rgba(255, 249, 240, 0.96);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.maplibregl-popup-tip {
+  border-top-color: rgba(255, 249, 240, 0.96) !important;
+}
+
+.map-popup {
+  display: grid;
+  gap: 6px;
+}
+
+.map-popup__meta,
+.map-popup__body,
+.map-popup__links {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.map-popup__links a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.map-popup__links a:hover {
+  text-decoration: underline;
+}
+
 .trip-planner-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

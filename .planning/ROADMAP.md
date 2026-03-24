@@ -53,7 +53,7 @@ The repository already contains a partial backend scaffold for 01-01, but there 
 **Plans**: TBD
 
 Current reality note:
-The repo now contains a working alpha data flow for `places` and `saves`, including seeded sample places, stronger server-side ranking for intent queries, note/status persistence, trip-driven coverage awareness for route stops, and broader imported trip categories such as stay, essentials, and transport. Route readiness is now also more honest about practical trip basics like food, stay, essentials, and transport coverage. The missing pieces are the eventual MapLibre surface and deeper enrichment/import depth.
+The repo now contains a working alpha data flow for `places` and `saves`, including seeded sample places, stronger server-side ranking for intent queries, note/status persistence, trip-driven coverage awareness for route stops, broader imported trip categories such as stay, essentials, and transport, and a real MapLibre-based map surface. Route readiness is now also more honest about practical trip basics like food, stay, essentials, and transport coverage, and the main map can scope discovery to the active viewport. The biggest remaining gaps are deeper enrichment/import depth and broader owned-data coverage.
 
 ### Phase 3: Trips
 **Goal**: Users can organize their journey into named trips with cities and planned places, viewable as both a map and a list
@@ -67,7 +67,7 @@ The repo now contains a working alpha data flow for `places` and `saves`, includ
 **Plans**: TBD
 
 Current reality note:
-Trip creation, ordered city routes, participant management, city-assigned trip saves, route summaries, city-level discovery suggestions, per-stop coverage/import readiness, route-level readiness status, and automatic city geocoding are now live in alpha form. New trip cities can also auto-queue their first import from the backend, which makes route prep less fragile across clients. The map page now also reflects the active route directly. The biggest open pieces are deeper import quality, broader data coverage, and later search/import depth.
+Trip creation, ordered city routes, participant management, city-assigned trip saves, route summaries, city-level discovery suggestions, per-stop coverage/import readiness, route-level readiness status, and automatic city geocoding are now live in alpha form. New trip cities can also auto-queue their first import from the backend, which makes route prep less fragile across clients. The map page now reflects the active route directly on top of the MapLibre surface, and the trip planner uses the same map stack. The biggest open pieces are deeper import quality, broader data coverage, and later search/import depth.
 
 ### Phase 4: Tracking
 **Goal**: Users can record what they spend and where they go, and see a summary of expenses by category

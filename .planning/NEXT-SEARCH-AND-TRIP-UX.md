@@ -239,3 +239,21 @@ Status: done
   - deploy docs and env examples match the actual app behavior
   - the app can be hardened for a homeserver without code edits
 Status: done
+
+### Item 15: MapLibre migration
+- Replace the temporary Leaflet map surface with MapLibre GL JS.
+- Keep the product closer to its intended long-term map architecture instead of polishing the temporary stack forever.
+- Success criteria:
+  - the discovery map and trip planner both run on MapLibre
+  - route overlays and place markers still work in the main trip flows
+  - the map architecture is now aligned with the long-term viewport-first direction
+Status: done
+
+### Item 16: Viewport-driven discovery
+- Stop treating the map as only a visual shell around generic place queries.
+- Let the active viewport shape discovery results so the map feels more like a real trip-planning surface.
+- Success criteria:
+  - map place queries can be filtered by bbox
+  - moving the map can reload places for the current view
+  - route-oriented map exploration gets tighter without abandoning the owned dataset
+Status: done
